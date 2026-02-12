@@ -1,0 +1,139 @@
+.timetables-page .page-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.timetables-page .page-header .back-btn {
+  flex-shrink: 0;
+}
+
+.timetables-page .page-header h1 {
+  margin: 0 0 0.25rem 0;
+}
+
+.timetables-page .page-desc {
+  color: var(--text-secondary);
+  margin: 0 0 1.25rem 0;
+  font-size: 0.95rem;
+}
+
+.generate-card {
+  max-width: 400px;
+  margin-bottom: 1.5rem;
+}
+
+.generate-card h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+}
+
+.generate-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.generate-form .form-group {
+  margin-bottom: 0;
+  min-width: 120px;
+}
+
+.generate-regenerate-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.generate-regenerate-all input {
+  margin: 0;
+}
+
+.generate-hint {
+  margin: 1rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.timetable-dept-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.timetable-dept-grid .dept-card {
+  padding: 1.25rem;
+}
+
+.timetable-dept-grid .dept-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.timetable-dept-grid .dept-card-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.timetable-dept-grid .empty-dept {
+  margin: 0;
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.timetable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.timetable-card {
+  padding: 1rem 1.25rem;
+}
+
+.timetable-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.timetable-card-header h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+}
+
+.timetable-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.alert-sm {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+.timetables-page .filter-bar {
+  margin-bottom: 1rem;
+}
+
+.timetables-page .filter-bar .btn {
+  margin-left: 0.5rem;
+}

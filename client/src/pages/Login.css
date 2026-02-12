@@ -1,0 +1,227 @@
+body {
+  background: #f4f4f6 !important;
+}
+
+.login-page {
+  background: #f4f4f6 !important;
+  width: 100%;
+}
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 80px);
+  background: #f4f4f6;
+  padding: 40px 80px;
+  gap: 80px;
+}
+
+
+/* LEFT SIDE */
+.login-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-animation-wrap {
+  width: 100%;
+  max-width: 420px;   /* smaller image */
+}
+
+.login-lottie {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 380px;
+}
+
+
+/* RIGHT CARD */
+.login-card {
+  flex: 0 0 420px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 40px 35px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  min-height: 540px;   /* Adjust if needed */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.login-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-form .btn-primary {
+  margin-top: auto;
+}
+
+.login-card h1 {
+  margin-bottom: 8px;
+  font-size: 26px;
+  font-weight: 600;
+  color: #222;
+}
+
+.login-subtitle {
+  margin-bottom: 24px;
+  font-size: 14px;
+  color: #666;
+}
+
+
+/* ROLE BUTTONS */
+.login-role-toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.login-role-toggle button {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  background: #f1f1f1;
+  color: #444;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.login-role-toggle button.active {
+  background: #7c3aed !important;   /* single theme color */
+  color: #ffffff !important;
+  border: none !important;
+}
+
+
+/* FORM */
+.login-form .form-group {
+  margin-bottom: 18px;
+}
+
+.login-form label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: #444;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #ddd !important;
+  font-size: 14px;
+  background: #ffffff !important;   /* force remove dark blue */
+  color: #222 !important;
+  transition: 0.2s ease;
+}
+
+.login-form input:focus {
+  outline: none;
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+
+/* BUTTON */
+.login-form .btn-primary {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: none !important;
+  font-size: 15px;
+  font-weight: 500;
+  background: #7c3aed !important;   /* single color */
+  color: white !important;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.login-form .btn-primary:hover {
+  background: #6d28d9 !important;
+}
+
+.google-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.google-btn:hover {
+  background: #f3f3f3;
+}
+
+.google-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 0.5;
+  border-bottom: 1px solid #ddd;
+}
+
+.divider span {
+  padding: 0 8px;
+  font-size: 12px;
+  color: #777;
+  font-weight: 500;
+}
+
+/* ERROR */
+.alert-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .login-page {
+    flex-direction: column;
+    padding: 40px 20px;
+  }
+
+  .login-left {
+    display: none;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 420px;
+  }
+}

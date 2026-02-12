@@ -1,0 +1,135 @@
+.timetable-view-page {
+  overflow-x: auto;
+}
+
+.view-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.back-btn {
+  flex-shrink: 0;
+}
+
+.view-header h1 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.35rem;
+}
+
+.view-meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.error-list {
+  margin: 0.5rem 0 0 1rem;
+  padding: 0;
+}
+
+.timetable-grid-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.timetable-grid {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.timetable-grid th,
+.timetable-grid td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  vertical-align: top;
+}
+
+.timetable-grid thead th {
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: center;
+  min-width: 100px;
+}
+
+.timetable-grid .corner {
+  min-width: 60px;
+  background: var(--surface-elevated);
+}
+
+.timetable-grid .period-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+  width: 48px;
+}
+
+.slot-cell {
+  min-width: 100px;
+  min-height: 52px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.slot-cell:hover {
+  background: var(--bg-hover);
+}
+
+.slot-content {
+  text-align: center;
+}
+
+.slot-subject {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 0.2rem;
+}
+
+.slot-faculty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.slot-empty {
+  color: var(--text-secondary);
+  display: block;
+  text-align: center;
+  padding: 0.25rem 0;
+}
+
+.slot-edit {
+  padding: 0.35rem;
+  background: var(--surface-elevated);
+}
+
+.slot-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.slot-select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.slot-editor-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.slot-editor-actions .btn {
+  flex: 1;
+}
