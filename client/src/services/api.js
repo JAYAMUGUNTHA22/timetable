@@ -65,6 +65,10 @@ export const authApi = {
   logout: () => request('/auth/logout', { method: 'POST' })
 };
 
+export const publicApi = {
+  getDepartments: () => request('/public/departments')
+};
+
 export const selfApi = {
   facultyTimetable: (semester) => request(`/me/faculty/timetable?semester=${semester || 1}`),
   studentTimetable: (semester) => request(`/me/student/timetable?semester=${semester || 1}`)

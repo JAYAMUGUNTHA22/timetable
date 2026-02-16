@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import AcademicConfig from './pages/AcademicConfig';
@@ -17,32 +17,28 @@ function RequireRole({ role, children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user || (role && user.role !== role)) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
   return children;
 }
 
 function HomeRouter() {
   const { user, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
+  if (loading) return <div className="app-loading">Loading...</div>;
+  if (!user) return <Login />;
   if (user.role === 'admin') return <Dashboard />;
   if (user.role === 'faculty') return <FacultySchedule />;
   if (user.role === 'student') return <StudentTimetable />;
   return <Dashboard />;
 }
 
-function App() {
+function AppContent() {
+  const location = useLocation();
   return (
-    <Layout>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={(
-            <HomeRouter />
-          )}
-        />
+    <div key={location.pathname} className="route-transition">
+      <Routes location={location}>
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<HomeRouter />} />
         <Route
           path="/config"
           element={(
@@ -108,6 +104,14 @@ function App() {
           )}
         />
       </Routes>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Layout>
+      <AppContent />
     </Layout>
   );
 }

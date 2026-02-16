@@ -5,57 +5,40 @@ import './Layout.css';
 
 function Layout({ children }) {
   const location = useLocation();
-  const { user } = useAuth();
-
-  const nav = [
-    { path: '/', label: 'Dashboard' },
-    { path: '/config', label: 'Academic Config' },
-    { path: '/departments', label: 'Departments' },
-    { path: '/subjects', label: 'Subjects' },
-    { path: '/faculty', label: 'Faculty' },
-    { path: '/timetables', label: 'Timetables' }
-  ];
+  const { user, logout } = useAuth();
 
   const isDashboard = location.pathname === '/';
   const isDashboardRoute = isDashboard && user && user.role === 'admin';
-  const isLoginPage = location.pathname === '/login';   // ✅ Added
-  const showNav = !!user && user.role === 'admin';
+  const isLoginPage = location.pathname === '/' && !user;
 
   return (
     <div
       className={
         'layout' +
         (isDashboardRoute ? ' layout--dashboard' : '') +
-        (isLoginPage ? ' layout--login' : '')   // ✅ Added
+        (isLoginPage ? ' layout--login' : '')
       }
     >
       <header className="header">
-        <Link to="/" className="brand">
-          <span className="brand-icon">◷</span>
+        <Link to="/" className={'brand' + (isLoginPage ? ' brand--login-only' : '')}>
+          {!isLoginPage && <span className="brand-icon">◷</span>}
           College Timetable Generator
         </Link>
 
-        {showNav && (
-          <nav className="nav">
-            {nav.map(({ path, label }) => (
-              <Link
-                key={path}
-                to={path}
-                className={
-                  'nav-link' +
-                  (location.pathname === path ? ' active' : '')
-                }
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        )}
+        <div className="header-right">
+          {user && (
+            <button type="button" className="btn-logout" onClick={logout}>
+              Sign Out
+            </button>
+          )}
+        </div>
       </header>
 
       <main
         className={
-          'main' + (isDashboardRoute ? ' main--dashboard' : '')
+          'main' +
+          (isDashboardRoute ? ' main--dashboard' : '') +
+          (isLoginPage ? ' main--login' : '')
         }
       >
         {children}

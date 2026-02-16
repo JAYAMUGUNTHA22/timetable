@@ -8,10 +8,26 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        cancelled = true;
+        setLoading(false);
+        setUser(null);
+      }
+    }, 5000);
     authApi.me()
-      .then((res) => setUser(res.user || null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+      .then((res) => {
+        if (!cancelled) setUser(res.user || null);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, []);
 
   const login = async (payload) => {
@@ -21,7 +37,11 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await authApi.logout();
+    try {
+      await authApi.logout();
+    } catch (e) {
+      /* ignore - still clear local state */
+    }
     setUser(null);
   };
 

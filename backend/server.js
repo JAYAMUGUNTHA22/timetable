@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
-
+// import "express" from express;
 const academicConfigRoutes = require('./routes/academicConfig');
 const departmentRoutes = require('./routes/departments');
 const subjectRoutes = require('./routes/subjects');
@@ -11,6 +11,7 @@ const facultyRoutes = require('./routes/faculty');
 const timetableRoutes = require('./routes/timetables');
 const authRoutes = require('./routes/auth');
 const selfRoutes = require('./routes/self');
+const publicRoutes = require('./routes/public');
 const { ensureDefaultAdmin } = require('./config/seedAdmin');
 
 const Subject = require('./models/Subject');
@@ -23,6 +24,7 @@ app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/me', selfRoutes);
+app.use('/api/public', publicRoutes);
 app.use('/api/config', academicConfigRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/subjects', subjectRoutes);
