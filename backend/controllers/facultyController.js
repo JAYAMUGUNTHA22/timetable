@@ -26,10 +26,11 @@ const getFacultyById = async (req, res) => {
 
 const createFaculty = async (req, res) => {
   try {
-    const { facultyId, name, homeDepartment, subjectsHandled, maxPeriodsPerDay, maxPeriodsPerWeek } = req.body;
+    const { facultyId, name, email, homeDepartment, subjectsHandled, maxPeriodsPerDay, maxPeriodsPerWeek } = req.body;
     const faculty = await Faculty.create({
       facultyId,
       name,
+      email,
       homeDepartment,
       subjectsHandled: subjectsHandled || [],
       maxPeriodsPerDay: Number(maxPeriodsPerDay) || 6,

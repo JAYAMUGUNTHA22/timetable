@@ -12,6 +12,12 @@ const facultySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  email: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
   homeDepartment: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Department',

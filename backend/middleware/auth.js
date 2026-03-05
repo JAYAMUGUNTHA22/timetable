@@ -35,7 +35,8 @@ function signUser(user) {
     faculty: user.faculty ? user.faculty.toString() : null,
     department: user.department ? user.department.toString() : null,
     sectionNumber: user.sectionNumber || null,
-    email: user.email || null
+    email: user.email || null,
+    name: user.name || null
   }, JWT_SECRET, { expiresIn: '7d' });
 }
 

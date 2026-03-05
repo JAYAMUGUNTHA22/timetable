@@ -12,7 +12,8 @@ function Subjects() {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({
     name: '', semester: 1, department: '', periodsPerWeek: 4,
-    facultyRooms: [{ faculty: '', roomNumber: '' }]
+    courseType: 'Theory', labDuration: 2, labSessionsPerWeek: 1,
+    facultyRooms: [{ faculty: '', roomNumber: '', labRoomNumber: '' }]
   });
   const [message, setMessage] = useState(null);
   const [filterSemester, setFilterSemester] = useState('');
@@ -31,8 +32,8 @@ function Subjects() {
 
   useEffect(() => {
     if (modal) {
-      departmentsApi.getAll().then(setDepartments).catch(() => {});
-      facultyApi.getAll().then(setFaculty).catch(() => {});
+      departmentsApi.getAll().then(setDepartments).catch(() => { });
+      facultyApi.getAll().then(setFaculty).catch(() => { });
       subjectsApi.getAll().then(setAllSubjects).catch(() => setAllSubjects([]));
     }
   }, [modal]);
@@ -40,7 +41,8 @@ function Subjects() {
   const openCreate = (departmentId) => {
     setForm({
       name: '', semester: 1, department: departmentId || '', periodsPerWeek: 4,
-      facultyRooms: [{ faculty: '', roomNumber: '' }]
+      courseType: 'Theory', labDuration: 2, labSessionsPerWeek: 1,
+      facultyRooms: [{ faculty: '', roomNumber: '', labRoomNumber: '' }]
     });
     setModal('create');
     setMessage(null);
@@ -53,7 +55,10 @@ function Subjects() {
       semester: s.semester,
       department: s.department?._id || s.department || '',
       periodsPerWeek: s.periodsPerWeek ?? 4,
-      facultyRooms: [{ faculty: '', roomNumber: '' }]
+      courseType: s.courseType || 'Theory',
+      labDuration: s.labDuration || 2,
+      labSessionsPerWeek: s.labSessionsPerWeek || 1,
+      facultyRooms: [{ faculty: '', roomNumber: '', labRoomNumber: '' }]
     });
     setModal('edit');
     setMessage(null);
@@ -63,17 +68,18 @@ function Subjects() {
           ...prev,
           facultyRooms: rooms.map((r) => ({
             faculty: r.faculty?._id || r.faculty || '',
-            roomNumber: r.roomNumber || ''
+            roomNumber: r.roomNumber || '',
+            labRoomNumber: r.labRoomNumber || ''
           }))
         }));
       }
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const addFacultyRoom = () => {
     setForm((prev) => ({
       ...prev,
-      facultyRooms: [...prev.facultyRooms, { faculty: '', roomNumber: '' }]
+      facultyRooms: [...prev.facultyRooms, { faculty: '', roomNumber: '', labRoomNumber: '' }]
     }));
   };
 
@@ -106,6 +112,9 @@ function Subjects() {
       semester: Number(form.semester) || 1,
       department: form.department,
       periodsPerWeek: Number(form.periodsPerWeek) || 4,
+      courseType: form.courseType,
+      labDuration: Number(form.labDuration),
+      labSessionsPerWeek: Number(form.labSessionsPerWeek),
       facultyRooms: valid
     };
     if (modal === 'create') {
@@ -254,9 +263,46 @@ function Subjects() {
                   ))}
                 </select>
               </div>
+
+              <div className="form-group">
+                <label>Course Type</label>
+                <select
+                  value={form.courseType}
+                  onChange={(e) => setForm(prev => ({ ...prev, courseType: e.target.value }))}
+                >
+                  <option value="Theory">Theory Only</option>
+                  <option value="Theory + Lab">Theory + Lab</option>
+                </select>
+              </div>
+
+              {form.courseType === 'Theory + Lab' && (
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Lab Duration (periods/session)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={form.labDuration}
+                      onChange={(e) => setForm(prev => ({ ...prev, labDuration: Number(e.target.value) || 2 }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Lab Sessions (per week)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={form.labSessionsPerWeek}
+                      onChange={(e) => setForm(prev => ({ ...prev, labSessionsPerWeek: Number(e.target.value) || 1 }))}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Faculty &amp; Room allocation</label>
-                <p className="form-hint">Add each faculty and room number. Section 1 gets 1st row, Section 2 gets 2nd, etc.</p>
+                <p className="form-hint">Add each faculty and room. For Labs, specify Lab Room as well.</p>
                 {(form.facultyRooms || []).map((row, index) => (
                   <div key={index} className="faculty-room-row">
                     <select
@@ -270,10 +316,18 @@ function Subjects() {
                     </select>
                     <input
                       type="text"
-                      placeholder="Room no."
+                      placeholder="Theory Room"
                       value={row.roomNumber}
                       onChange={(e) => updateFacultyRoom(index, 'roomNumber', e.target.value)}
                     />
+                    {form.courseType === 'Theory + Lab' && (
+                      <input
+                        type="text"
+                        placeholder="Lab Room"
+                        value={row.labRoomNumber || ''}
+                        onChange={(e) => updateFacultyRoom(index, 'labRoomNumber', e.target.value)}
+                      />
+                    )}
                     <button type="button" className="btn btn-sm btn-danger" onClick={() => removeFacultyRoom(index)} disabled={(form.facultyRooms || []).length <= 1}>Remove</button>
                   </div>
                 ))}

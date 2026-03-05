@@ -66,10 +66,13 @@ export const authApi = {
 };
 
 export const publicApi = {
-  getDepartments: () => request('/public/departments')
+  getDepartments: () => request('/public/departments'),
+  getHolidays: () => request('/public/holidays')
 };
 
 export const selfApi = {
   facultyTimetable: (semester) => request(`/me/faculty/timetable?semester=${semester || 1}`),
-  studentTimetable: (semester) => request(`/me/student/timetable?semester=${semester || 1}`)
+  studentTimetable: (semester) => request(`/me/student/timetable?semester=${semester || 1}`),
+  departmentTimetables: (semester) => request(`/me/faculty/department-timetables?semester=${semester || 1}`),
+  getHolidays: () => request('/me/holidays')
 };

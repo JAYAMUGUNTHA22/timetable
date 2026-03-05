@@ -221,3 +221,10 @@ tr:hover td {
   font-size: 1rem;
   color: var(--text-secondary);
 }
+
+.page-loading {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}

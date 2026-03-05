@@ -11,6 +11,11 @@ import TimetableView from './pages/TimetableView';
 import Login from './pages/Login';
 import FacultySchedule from './pages/FacultySchedule';
 import StudentTimetable from './pages/StudentTimetable';
+import StudentDashboard from './pages/StudentDashboard';
+import StudentHolidays from './pages/StudentHolidays';
+import FacultyDashboard from './pages/FacultyDashboard';
+import LeaveSchedule from './pages/LeaveSchedule';
+import DepartmentTimetables from './pages/DepartmentTimetables';
 import { useAuth } from './AuthContext';
 
 function RequireRole({ role, children }) {
@@ -27,8 +32,8 @@ function HomeRouter() {
   if (loading) return <div className="app-loading">Loading...</div>;
   if (!user) return <Login />;
   if (user.role === 'admin') return <Dashboard />;
-  if (user.role === 'faculty') return <FacultySchedule />;
-  if (user.role === 'student') return <StudentTimetable />;
+  if (user.role === 'faculty') return <FacultyDashboard />;
+  if (user.role === 'student') return <StudentDashboard />;
   return <Dashboard />;
 }
 
@@ -100,6 +105,46 @@ function AppContent() {
           element={(
             <RequireRole role="student">
               <StudentTimetable />
+            </RequireRole>
+          )}
+        />
+        <Route
+          path="/faculty-dashboard"
+          element={(
+            <RequireRole role="faculty">
+              <FacultyDashboard />
+            </RequireRole>
+          )}
+        />
+        <Route
+          path="/student-dashboard"
+          element={(
+            <RequireRole role="student">
+              <StudentDashboard />
+            </RequireRole>
+          )}
+        />
+        <Route
+          path="/student-holidays"
+          element={(
+            <RequireRole role="student">
+              <StudentHolidays />
+            </RequireRole>
+          )}
+        />
+        <Route
+          path="/leave-schedule"
+          element={(
+            <RequireRole role="faculty">
+              <LeaveSchedule />
+            </RequireRole>
+          )}
+        />
+        <Route
+          path="/department-timetables"
+          element={(
+            <RequireRole role="faculty">
+              <DepartmentTimetables />
             </RequireRole>
           )}
         />

@@ -16,6 +16,10 @@ const subjectFacultyRoomSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  labRoomNumber: {
+    type: String,
+    trim: true
+  },
   order: { type: Number, default: 0 }
 }, { timestamps: true });
 

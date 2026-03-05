@@ -5,6 +5,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  name: {
+    type: String,
+    trim: true
+  },
   passwordHash: {
     type: String
   },

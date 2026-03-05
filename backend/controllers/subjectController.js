@@ -38,13 +38,16 @@ const getSubject = async (req, res) => {
 
 const createSubject = async (req, res) => {
   try {
-    const { name, semester, department, periodsPerWeek, assignedFaculty, code, facultyRooms } = req.body;
+    const { name, semester, department, periodsPerWeek, assignedFaculty, code, facultyRooms, courseType, labDuration, labSessionsPerWeek } = req.body;
     const doc = {
       name,
       semester: Number(semester),
       department: toObjectId(department) || department,
       periodsPerWeek: Number(periodsPerWeek),
-      assignedFaculty: toObjectId(assignedFaculty) || (facultyRooms && facultyRooms[0] && facultyRooms[0].faculty ? toObjectId(facultyRooms[0].faculty) : null) || null
+      assignedFaculty: toObjectId(assignedFaculty) || (facultyRooms && facultyRooms[0] && facultyRooms[0].faculty ? toObjectId(facultyRooms[0].faculty) : null) || null,
+      courseType: courseType || 'Theory',
+      labDuration: Number(labDuration) || 2,
+      labSessionsPerWeek: Number(labSessionsPerWeek) || 1
     };
     if (code && String(code).trim()) {
       doc.code = String(code).trim();
@@ -59,6 +62,7 @@ const createSubject = async (req, res) => {
           subject: subject._id,
           faculty: fr.faculty,
           roomNumber: String(fr.roomNumber).trim(),
+          labRoomNumber: fr.labRoomNumber ? String(fr.labRoomNumber).trim() : undefined,
           order: i
         }));
       if (toInsert.length > 0) await SubjectFacultyRoom.insertMany(toInsert);
@@ -74,13 +78,17 @@ const createSubject = async (req, res) => {
 
 const updateSubject = async (req, res) => {
   try {
-    const { name, semester, department, periodsPerWeek, assignedFaculty, facultyRooms } = req.body;
+    const { name, semester, department, periodsPerWeek, assignedFaculty, facultyRooms, courseType, labDuration, labSessionsPerWeek } = req.body;
     const update = {};
     if (name !== undefined) update.name = name;
     if (semester !== undefined) update.semester = Number(semester);
     if (department !== undefined) update.department = toObjectId(department) || department;
     if (periodsPerWeek !== undefined) update.periodsPerWeek = Number(periodsPerWeek);
     if (assignedFaculty !== undefined) update.assignedFaculty = assignedFaculty;
+    if (courseType !== undefined) update.courseType = courseType;
+    if (labDuration !== undefined) update.labDuration = Number(labDuration);
+    if (labSessionsPerWeek !== undefined) update.labSessionsPerWeek = Number(labSessionsPerWeek);
+
     const subject = await Subject.findByIdAndUpdate(
       req.params.id,
       update,
@@ -97,6 +105,7 @@ const updateSubject = async (req, res) => {
           subject: req.params.id,
           faculty: fr.faculty,
           roomNumber: String(fr.roomNumber).trim(),
+          labRoomNumber: fr.labRoomNumber ? String(fr.labRoomNumber).trim() : undefined,
           order: i
         }));
       if (toInsert.length > 0) {

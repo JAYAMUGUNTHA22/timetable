@@ -4,6 +4,22 @@ const { authRequired, requireRole } = require('../middleware/auth');
 const Timetable = require('../models/Timetable');
 const AcademicConfig = require('../models/AcademicConfig');
 const Faculty = require('../models/Faculty');
+const Department = require('../models/Department');
+
+// Derive department from facultyId prefix (e.g. CS005 -> CS, then find department with departmentId CS or CSE)
+async function getDepartmentFromFacultyId(facultyIdStr) {
+  if (!facultyIdStr || typeof facultyIdStr !== 'string') return null;
+  const match = facultyIdStr.trim().match(/^([A-Za-z]+)/i);
+  const prefix = match ? match[1].toUpperCase() : '';
+  if (!prefix) return null;
+  const dept = await Department.findOne({
+    $or: [
+      { departmentId: { $regex: new RegExp('^' + prefix, 'i') } },
+      { name: { $regex: new RegExp('^' + prefix, 'i') } }
+    ]
+  }).lean();
+  return dept ? dept._id : null;
+}
 
 // Faculty: view own timetable + free periods
 router.get('/faculty/timetable', authRequired, requireRole('faculty'), async (req, res) => {
@@ -81,6 +97,44 @@ router.get('/student/timetable', authRequired, requireRole('student'), async (re
     console.error('Student self timetable error:', err);
     res.status(500).json({ error: 'Failed to load timetable.' });
   }
+});
+
+// Faculty: view all section timetables for their department
+router.get('/faculty/department-timetables', authRequired, requireRole('faculty'), async (req, res) => {
+  try {
+    const facultyId = req.user.faculty;
+    if (!facultyId) return res.status(400).json({ error: 'Faculty not linked to user.' });
+    const faculty = await Faculty.findById(facultyId).populate('homeDepartment', 'name departmentId').lean();
+    let departmentId = faculty?.homeDepartment?._id || faculty?.homeDepartment;
+    if (!departmentId && faculty?.facultyId) {
+      departmentId = await getDepartmentFromFacultyId(faculty.facultyId);
+    }
+    if (!departmentId) return res.status(400).json({ error: 'Faculty department could not be determined. Set home department or use a faculty ID that matches a department (e.g. CS005 for CSE).' });
+
+    const semester = Number(req.query.semester) || 1;
+    const timetables = await Timetable.find({ department: departmentId, semester }).populate('department', 'name departmentId');
+
+    res.json(timetables);
+  } catch (err) {
+    console.error('Dept timetables error:', err);
+    res.status(500).json({ error: 'Failed to load department timetables.' });
+  }
+});
+
+// Global: Holidays (could be moved to a shared config later)
+router.get('/holidays', authRequired, async (req, res) => {
+  const holidays = [
+    { date: '2024-01-01', name: 'New Year\'s Day' },
+    { date: '2024-01-15', name: 'Pongal' },
+    { date: '2024-01-26', name: 'Republic Day' },
+    { date: '2024-03-25', name: 'Holi' },
+    { date: '2024-04-10', name: 'Eid al-Fitr' },
+    { date: '2024-08-15', name: 'Independence Day' },
+    { date: '2024-10-02', name: 'Gandhi Jayanti' },
+    { date: '2024-11-01', name: 'Diwali' },
+    { date: '2024-12-25', name: 'Christmas Day' },
+  ];
+  res.json(holidays);
 });
 
 module.exports = router;

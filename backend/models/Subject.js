@@ -31,6 +31,19 @@ const subjectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Faculty',
     required: false
+  },
+  courseType: {
+    type: String,
+    enum: ['Theory', 'Theory + Lab'],
+    default: 'Theory'
+  },
+  labDuration: {
+    type: Number,
+    default: 2 // consecutive periods per session
+  },
+  labSessionsPerWeek: {
+    type: Number,
+    default: 1 // number of lab sessions per week
   }
 }, { timestamps: true });
 

@@ -133,3 +133,8 @@
 .slot-editor-actions .btn {
   flex: 1;
 }
+
+.slot-lab {
+  background-color: #f0f7ff;
+  border-left: 3px solid #007bff;
+}

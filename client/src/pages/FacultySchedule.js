@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { selfApi } from '../services/api';
 import './Faculty.css';
 
 function FacultySchedule() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,8 +20,7 @@ function FacultySchedule() {
 
   useEffect(() => {
     load(semester);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [semester]);
 
   if (loading) return <div className="page-loading">Loading...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
@@ -30,6 +31,14 @@ function FacultySchedule() {
   return (
     <div className="faculty-page">
       <div className="page-header">
+        <button
+          type="button"
+          className="back-btn"
+          onClick={() => navigate('/')}
+          style={{ marginRight: '16px' }}
+        >
+          ← Back to Dashboard
+        </button>
         <h1>My Schedule</h1>
       </div>
       {faculty && (
