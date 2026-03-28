@@ -48,15 +48,18 @@ router.get('/faculty/timetable', authRequired, requireRole('faculty'), async (re
         for (const tt of timetables) {
           const slotRow = tt.slots && tt.slots[d];
           const slot = slotRow && slotRow[p];
-          if (slot && slot.faculty && slot.faculty.toString() === facultyId) {
-            found = {
-              status: 'class',
-              subjectName: slot.subjectName,
-              department: tt.department,
-              sectionNumber: tt.sectionNumber,
-              roomNumber: slot.roomNumber || ''
-            };
-            break;
+          if (slot && slot.assignments) {
+            const assignment = slot.assignments.find(a => a.faculty && a.faculty.toString() === facultyId);
+            if (assignment) {
+              found = {
+                status: 'class',
+                subjectName: assignment.subjectName || slot.subjectName,
+                department: tt.department,
+                sectionNumber: assignment.sectionNumber,
+                roomNumber: assignment.roomNumber || ''
+              };
+              break;
+            }
           }
         }
         if (!found) {
@@ -90,9 +93,38 @@ router.get('/student/timetable', authRequired, requireRole('student'), async (re
       return res.status(400).json({ error: 'Student is not linked to department/section.' });
     }
     const semester = Number(req.query.semester) || 1;
-    const tt = await Timetable.findOne({ department, sectionNumber, semester }).populate('department', 'name departmentId');
-    if (!tt) return res.status(404).json({ error: 'Timetable not found for your section.' });
-    res.json(tt);
+    const tt = await Timetable.findOne({ department, semester }).populate('department', 'name departmentId').lean();
+    if (!tt) return res.status(404).json({ error: 'Timetable not found for your department.' });
+
+    const studentSlots = [];
+    if (tt.slots) {
+      for (let d = 0; d < tt.slots.length; d++) {
+        const row = [];
+        for (let p = 0; p < (tt.slots[d] || []).length; p++) {
+          const slot = tt.slots[d][p];
+          if (slot && slot.assignments) {
+            const assignment = slot.assignments.find(a => a.sectionNumber === sectionNumber);
+            if (assignment) {
+              row.push({
+                subject: assignment.subject || slot.subject,
+                subjectName: assignment.subjectName || slot.subjectName,
+                faculty: assignment.faculty,
+                facultyName: assignment.facultyName,
+                roomNumber: assignment.roomNumber,
+                type: slot.type
+              });
+            } else {
+              row.push(null);
+            }
+          } else {
+            row.push(null);
+          }
+        }
+        studentSlots.push(row);
+      }
+    }
+
+    res.json({ ...tt, sectionNumber, slots: studentSlots });
   } catch (err) {
     console.error('Student self timetable error:', err);
     res.status(500).json({ error: 'Failed to load timetable.' });

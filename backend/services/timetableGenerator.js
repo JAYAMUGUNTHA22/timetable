@@ -12,23 +12,23 @@ function idStr(id) {
   return String(id);
 }
 
-/**
- * Build global faculty availability: facultyId -> Set of "dayIndex-periodIndex"
- * Used to avoid assigning same faculty to two classes in same slot.
- */
 function buildGlobalFacultyAvailability(existingTimetables, workingDays, periodsPerDay) {
-  const availability = new Map(); // facultyId -> Set of "day-period"
+  const availability = new Map();
 
   for (const tt of existingTimetables) {
     if (!tt.slots || !Array.isArray(tt.slots)) continue;
     for (let d = 0; d < tt.slots.length; d++) {
       for (let p = 0; p < (tt.slots[d] || []).length; p++) {
         const slot = tt.slots[d][p];
-        if (slot && slot.faculty && slot.faculty.toString) {
-          const fid = slot.faculty.toString();
-          const key = `${d}-${p}`;
-          if (!availability.has(fid)) availability.set(fid, new Set());
-          availability.get(fid).add(key);
+        if (slot && slot.assignments) {
+          for (const a of slot.assignments) {
+            if (a.faculty && a.faculty.toString) {
+              const fid = a.faculty.toString();
+              const key = `${d}-${p}`;
+              if (!availability.has(fid)) availability.set(fid, new Set());
+              availability.get(fid).add(key);
+            }
+          }
         }
       }
     }
@@ -36,9 +36,6 @@ function buildGlobalFacultyAvailability(existingTimetables, workingDays, periods
   return availability;
 }
 
-/**
- * Get remaining periods per week for a faculty (considering existing assignments).
- */
 function getFacultyRemainingPeriods(facultyAvailability, facultyId, workingDays, periodsPerDay, maxPerWeek) {
   const used = facultyAvailability.get(facultyId);
   const totalSlots = workingDays.length * periodsPerDay;
@@ -46,9 +43,6 @@ function getFacultyRemainingPeriods(facultyAvailability, facultyId, workingDays,
   return Math.min(maxPerWeek - usedCount, totalSlots);
 }
 
-/**
- * Get count of periods assigned to faculty on a specific day.
- */
 function getFacultyCountOnDay(globalAvailability, facultyId, dayIndex) {
   if (!globalAvailability.has(facultyId)) return 0;
   let count = 0;
@@ -58,12 +52,6 @@ function getFacultyCountOnDay(globalAvailability, facultyId, dayIndex) {
   return count;
 }
 
-/**
- * Check if faculty can be placed at (dayIndex, periodIndex):
- * - Not already booked globally
- * - Within max periods per day for that day
- * - Within max periods per week
- */
 function canPlaceFaculty(globalAvailability, facultyId, dayIndex, periodIndex, facultyTotalUsed, maxPerDay, maxPerWeek) {
   const key = `${dayIndex}-${periodIndex}`;
   if (globalAvailability.has(facultyId) && globalAvailability.get(facultyId).has(key)) return false;
@@ -73,20 +61,41 @@ function canPlaceFaculty(globalAvailability, facultyId, dayIndex, periodIndex, f
   return true;
 }
 
-/**
- * Check if (dayIndex, periodIndex) is a break period.
- */
 function isBreakPeriod(breakPeriodIndices, dayIndex, periodIndex, periodsPerDay) {
   if (!breakPeriodIndices || !breakPeriodIndices.length) return false;
   return breakPeriodIndices.includes(periodIndex);
 }
 
-/**
- * Generate timetables for all departments/sections for a given semester.
- * Options: { replaceExisting: false } = only create missing timetables (leave existing unchanged).
- *           { replaceExisting: true } = delete all for semester and regenerate.
- * Returns { timetables: [...], errors: [...], skipped: number }.
- */
+function dedupeFacultyRoomEntries(frList = []) {
+  const seen = new Set();
+  const out = [];
+  for (const fr of frList) {
+    if (!fr || !fr.faculty) continue;
+    const fid = fr.faculty._id ? fr.faculty._id.toString() : fr.faculty.toString();
+    if (seen.has(fid)) continue;
+    seen.add(fid);
+    out.push(fr);
+  }
+  return out;
+}
+
+function buildUniqueFacultyPoolFromAssignments(assignments = []) {
+  const seen = new Set();
+  const pool = [];
+  for (const a of assignments) {
+    if (!a || !a.faculty) continue;
+    const fid = a.faculty._id ? a.faculty._id.toString() : a.faculty.toString();
+    if (seen.has(fid)) continue;
+    seen.add(fid);
+    pool.push({
+      faculty: a.faculty,
+      facultyName: a.facultyName || '',
+      roomNumber: a.roomNumber || ''
+    });
+  }
+  return pool;
+}
+
 async function generateTimetablesForSemester(semester, options = {}) {
   const replaceExisting = options.replaceExisting === true;
   const semNum = Number(semester);
@@ -109,6 +118,7 @@ async function generateTimetablesForSemester(semester, options = {}) {
   const allFacultyRooms = await SubjectFacultyRoom.find({ subject: { $in: subjectIds } })
     .populate('faculty')
     .sort({ subject: 1, order: 1 });
+
   const facultyRoomsBySubject = new Map();
   for (const fr of allFacultyRooms) {
     const sid = fr.subject.toString();
@@ -138,9 +148,16 @@ async function generateTimetablesForSemester(semester, options = {}) {
       for (let d = 0; d < tt.slots.length; d++) {
         for (let p = 0; p < (tt.slots[d] || []).length; p++) {
           const slot = tt.slots[d][p];
-          if (slot && slot.faculty) {
-            const fid = slot.faculty.toString();
-            facultyTotalUsed.set(fid, (facultyTotalUsed.get(fid) || 0) + 1);
+          if (slot && slot.assignments) {
+            const uniqueInSlot = new Set();
+            for (const a of slot.assignments) {
+              if (a.faculty) {
+                uniqueInSlot.add(a.faculty.toString());
+              }
+            }
+            for (const fid of uniqueInSlot) {
+              facultyTotalUsed.set(fid, (facultyTotalUsed.get(fid) || 0) + 1);
+            }
           }
         }
       }
@@ -150,7 +167,6 @@ async function generateTimetablesForSemester(semester, options = {}) {
   let globalAvailability = buildGlobalFacultyAvailability(existingTimetables, workingDays, periodsPerDay);
   const generated = [];
 
-  const maxSections = Math.max(...departments.map((d) => d.sectionsCount || 1), 1);
   const deptSubjectsCache = new Map();
   for (const dept of departments) {
     const deptIdStr = idStr(dept._id);
@@ -174,321 +190,407 @@ async function generateTimetablesForSemester(semester, options = {}) {
     });
   }
 
-  // ... (previous code)
+  for (const dept of departments) {
+    const sectionsCount = dept.sectionsCount || 1;
+    const deptIdStr = idStr(dept._id);
+    const cached = deptSubjectsCache.get(deptIdStr);
+    if (!cached) continue;
+    const { deptSubjects } = cached;
 
-  for (let sectionNum = 1; sectionNum <= maxSections; sectionNum++) {
-    for (const dept of departments) {
-      const sectionsCount = dept.sectionsCount || 1;
-      if (sectionNum > sectionsCount) continue;
-      const deptIdStr = idStr(dept._id);
-      const cached = deptSubjectsCache.get(deptIdStr);
-      if (!cached) continue;
-      const { deptSubjects } = cached;
+    // If replaceExisting is OFF, we will seed scheduling from the existing timetable
+    // (so a "Monday-only" timetable can be expanded).
+    let existingForDept = null;
+    if (!replaceExisting) {
+      existingForDept = await Timetable.findOne({
+        department: dept._id,
+        semester: semNum
+      }).lean();
+    }
 
-      if (!replaceExisting) {
-        const existing = await Timetable.findOne({
-          department: dept._id,
-          sectionNumber: sectionNum,
-          semester: semNum
-        });
-        if (existing) {
-          skipped++;
-          continue;
+    const sectionErrors = [];
+    const slots = Array.from({ length: workingDays.length }, () =>
+      Array.from({ length: periodsPerDay }, () => null)
+    );
+
+    if (!replaceExisting && existingForDept && Array.isArray(existingForDept.slots)) {
+      // Only copy existing when replaceExisting is OFF (preserve/expand mode)
+      for (let d = 0; d < Math.min(workingDays.length, existingForDept.slots.length); d++) {
+        const srcDay = existingForDept.slots[d] || [];
+        for (let p = 0; p < Math.min(periodsPerDay, srcDay.length); p++) {
+          const cell = srcDay[p];
+          if (cell) slots[d][p] = cell;
+        }
+      }
+    }
+
+    // Monday template mode:
+    // If Monday has any slots and replaceExisting is OFF, treat Monday as master template
+    // and generate all other working days from it with shuffled periods.
+    // This intentionally bypasses constraint-based scheduling for this flow.
+    const mondayIndex = workingDays.indexOf('Monday');
+    if (!replaceExisting && mondayIndex >= 0 && Array.isArray(slots) && slots[mondayIndex]) {
+      let mondayHasAny = false;
+
+      for (let d = 0; d < workingDays.length; d++) {
+        for (let p = 0; p < periodsPerDay; p++) {
+          if (isBreakPeriod(breakPeriodIndices, d, p, periodsPerDay)) continue;
+          const cell = slots[d] && slots[d][p];
+          if (!cell) continue;
+          if (d === mondayIndex) mondayHasAny = true;
         }
       }
 
+      if (mondayHasAny) {
+        // Use Monday as a template, but shuffle period positions for every other day.
+        // Each slot cell already contains per-section assignments (faculty/room), so copying the
+        // cell preserves your "same subject, different faculty per section" requirement.
+        const mondayDay = slots[mondayIndex] || [];
+        const nonBreakPeriodIndices = [];
+        const mondayCells = [];
+
+        for (let p = 0; p < periodsPerDay; p++) {
+          if (isBreakPeriod(breakPeriodIndices, mondayIndex, p, periodsPerDay)) continue;
+          nonBreakPeriodIndices.push(p);
+          mondayCells.push(mondayDay[p] ? JSON.parse(JSON.stringify(mondayDay[p])) : null);
+        }
+
+        const shuffle = (arr) => {
+          // Fisher–Yates shuffle
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        };
+
+        for (let d = 0; d < workingDays.length; d++) {
+          if (d === mondayIndex) continue;
+
+          const shuffledCells = shuffle([...mondayCells]);
+          for (let i = 0; i < nonBreakPeriodIndices.length; i++) {
+            const destP = nonBreakPeriodIndices[i];
+            const srcCell = shuffledCells[i];
+            slots[d][destP] = srcCell ? JSON.parse(JSON.stringify(srcCell)) : null;
+          }
+        }
+
+        // Save expanded timetable and skip auto-scheduling.
+        let timetable = await Timetable.findOne({
+          department: dept._id,
+          semester: semNum
+        });
+
+        if (!timetable) {
+          timetable = new Timetable({
+            department: dept._id,
+            semester: semNum,
+            sectionsCount: sectionsCount,
+            workingDays,
+            periodsPerDay,
+            slots: [],
+            generationErrors: []
+          });
+        }
+
+        timetable.slots = slots;
+        timetable.sectionsCount = sectionsCount;
+        timetable.workingDays = workingDays;
+        timetable.periodsPerDay = periodsPerDay;
+        timetable.generationErrors = sectionErrors;
+        timetable.generatedAt = new Date();
+        timetable.updatedAt = new Date();
+        await timetable.save();
+        generated.push(timetable);
+        continue;
+      }
+    }
+
+    // Uniform multi-section mode - ONE subject per slot, four different faculty (one per section):
+    // - Each cell: exactly ONE subject + FOUR different faculty (one per section)
+    // - Only subjects with >= sectionsCount faculty are used
+    // - Subjects rotate evenly across the week
+    const nonBreakPeriodsPerDay = periodsPerDay - (breakPeriodIndices ? breakPeriodIndices.length : 0);
+    const eligibleSubjects = [...deptSubjects]
+      .filter((s) => {
+        const sid = s._id.toString();
+        const unique = dedupeFacultyRoomEntries(facultyRoomsBySubject.get(sid) || []);
+        return unique.length >= 1;
+      })
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    let subjectBase = eligibleSubjects;
+    if (subjectBase.length < nonBreakPeriodsPerDay) {
+      for (const s of deptSubjects) {
+        if (subjectBase.find((x) => x._id.toString() === s._id.toString())) continue;
+        const sid = s._id.toString();
+        const unique = dedupeFacultyRoomEntries(facultyRoomsBySubject.get(sid) || []);
+        if (unique.length >= 1) subjectBase = [...subjectBase, s];
+        if (subjectBase.length >= nonBreakPeriodsPerDay) break;
+      }
+    }
+    // Same subject name can appear in multiple rows; schedule by unique name.
+    if (subjectBase.length > 0) {
+      const seenSubjectNames = new Set();
+      subjectBase = subjectBase.filter((s) => {
+        const key = String(s.name || '').trim().toLowerCase();
+        if (!key || seenSubjectNames.has(key)) return false;
+        seenSubjectNames.add(key);
+        return true;
+      });
+    }
+    if (subjectBase.length === 0 && deptSubjects.length > 0) {
+      errors.push(`[${dept.name}] No subjects have faculty mapping. Add faculty in Subjects -> Faculty & Room.`);
+    }
+    const canUseUniformSectionMode =
+      sectionsCount >= 1 &&
+      nonBreakPeriodsPerDay > 0 &&
+      subjectBase.length > 0;
+
+    if (canUseUniformSectionMode) {
       const sectionErrors = [];
       const slots = Array.from({ length: workingDays.length }, () =>
         Array.from({ length: periodsPerDay }, () => null)
       );
-      const subjectDayCount = new Map();
-      const daySubjectWithTwo = [];
 
-      function getSubjectCountOnDay(sid, d) {
-        if (!subjectDayCount.has(sid)) return 0;
-        return subjectDayCount.get(sid).get(d) || 0;
-      }
-      function canPlaceSubjectOnDay(sid, d, isSecondOnDay) {
-        // For theory, limits to 2 per day. Lab blocks are handled separately (usually 1 block per day).
-        if (getSubjectCountOnDay(sid, d) >= 2) return false;
-        if (isSecondOnDay && daySubjectWithTwo[d] != null && daySubjectWithTwo[d] !== sid) return false;
-        return true;
-      }
-      function recordPlace(sid, d) {
-        if (!subjectDayCount.has(sid)) subjectDayCount.set(sid, new Map());
-        const m = subjectDayCount.get(sid);
-        m.set(d, (m.get(d) || 0) + 1);
-        if (m.get(d) === 2) daySubjectWithTwo[d] = sid;
-      }
+      const subjectUsageCount = new Map();
+      for (const s of subjectBase) subjectUsageCount.set(s._id.toString(), 0);
+      // Keep daily subject spread balanced.
+      const maxSameSubjectPerDay = Math.max(
+        1,
+        Math.ceil(nonBreakPeriodsPerDay / Math.max(1, subjectBase.length))
+      );
 
-      // --- LAB PLACEMENT ---
-      const labSubjects = deptSubjects.filter(s => s.courseType === 'Theory + Lab');
+      const shuffle = (arr) => {
+        const out = [...arr];
+        for (let i = out.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+      };
 
+      const getNormalizedName = (s) => String(s?.name || '').trim().toLowerCase();
+      const desiredRowsPerSlot = Math.max(sectionsCount || 1, 4);
+      const buildEffectivePool = (subject, forLab = false) => {
+        const normalizedName = getNormalizedName(subject);
+        const sameNameSubjects = deptSubjects.filter(
+          (s) => getNormalizedName(s) === normalizedName
+        );
+        const seenFaculty = new Set();
+        const effectivePool = [];
+        for (const s of sameNameSubjects) {
+          const sId = s._id.toString();
+          const uniqueFr = dedupeFacultyRoomEntries(facultyRoomsBySubject.get(sId) || []);
+          for (const fr of uniqueFr) {
+            const fid = fr.faculty && (fr.faculty._id ? fr.faculty._id.toString() : fr.faculty.toString());
+            if (!fid || seenFaculty.has(fid)) continue;
+            seenFaculty.add(fid);
+            effectivePool.push({
+              faculty: fr.faculty,
+              facultyName: fr.faculty.name || '',
+              facultyId: fr.faculty.facultyId || '',
+              roomNumber: (forLab ? (fr.labRoomNumber || fr.roomNumber || '') : (fr.roomNumber || ''))
+            });
+          }
+        }
+        // Keep classrooms in stable ascending order for each subject.
+        effectivePool.sort((a, b) => String(a.roomNumber || '').localeCompare(String(b.roomNumber || ''), undefined, { numeric: true, sensitivity: 'base' }));
+        return effectivePool;
+      };
+
+      // Lab-first placement:
+      // - At most one lab block per day
+      // - Consecutive periods only (for 7 periods: 1-2, 3-4, 5-6)
+      // - No theory for the same subject on the same day
+      const labSubjects = subjectBase.filter((s) => {
+        const normalized = getNormalizedName(s);
+        return deptSubjects.some((ds) => getNormalizedName(ds) === normalized && ds.courseType === 'Theory + Lab');
+      });
+      const labSessionsRemainingByName = new Map();
+      const labSubjectByName = new Map();
       for (const s of labSubjects) {
-        const sessionsNeeded = s.labSessionsPerWeek || 0;
-        const duration = s.labDuration || 2;
-        const sid = s._id.toString();
-
-        const frList = facultyRoomsBySubject.get(sid);
-        let faculty, roomNumber;
-        // Use labRoomNumber if available, else regular room (or empty)
-        if (frList && frList.length > 0) {
-          const idx = (sectionNum - 1) % frList.length;
-          faculty = frList[idx].faculty;
-          roomNumber = frList[idx].labRoomNumber || frList[idx].roomNumber || '';
-        } else {
-          faculty = s.assignedFaculty;
-          roomNumber = '';
+        const normalized = getNormalizedName(s);
+        if (!labSubjectByName.has(normalized)) labSubjectByName.set(normalized, s);
+        const sessions = deptSubjects
+          .filter((ds) => getNormalizedName(ds) === normalized && ds.courseType === 'Theory + Lab')
+          .map((ds) => ds.labSessionsPerWeek || 1);
+        const needed = Math.max(1, sessions.length ? Math.max(...sessions) : 1);
+        if (!labSessionsRemainingByName.has(normalized)) {
+          labSessionsRemainingByName.set(normalized, needed);
         }
-
-        if (!faculty) {
-          sectionErrors.push(`Lab Subject "${s.name}" has no faculty. Add Faculty.`);
-          continue;
-        }
-        const facultyId = faculty._id.toString();
-        const maxPerDay = faculty.maxPeriodsPerDay || 6;
-        const maxPerWeek = faculty.maxPeriodsPerWeek || 30;
-
-        let sessionsPlaced = 0;
-        // Try to place each session
-        for (let sess = 0; sess < sessionsNeeded; sess++) {
-          let placed = false;
-          // Shuffle days for randomness
-          const daysShuffled = Array.from({ length: workingDays.length }, (_, i) => i).sort(() => Math.random() - 0.5);
-
-          for (const d of daysShuffled) {
-            // If already has this subject on this day (theory or lab), skip to avoid overload? 
-            // User said "a lab class can come only two days per week". 
-            // We accept placing on any day as long as slots are free. 
-            // If we want to strictly limit "lab only on 2 days", we just place them.
-            // But we should check if we already placed a LAB session for this subject on this day.
-            // (Assuming 1 lab session per day max).
-            // Check if we already placed *any* slot for this subject on this day?
-            // Maybe labs can share day with theory. 
-            // Let's enforce: Maximum 1 Lab Session of this subject per day.
-
-            // Check if contiguous slots available
-            for (let p = 0; p <= periodsPerDay - duration; p++) {
-              // Check if block [p ... p+duration-1] is valid
-              let validBlock = true;
-              for (let k = 0; k < duration; k++) {
-                if (slots[d][p + k]) { validBlock = false; break; } // Occupied
-                if (isBreakPeriod(breakPeriodIndices, d, p + k, periodsPerDay)) { validBlock = false; break; } // Break
-
-                // Check faculty availability
-                if (!canPlaceFaculty(globalAvailability, facultyId, d, p + k, facultyTotalUsed, maxPerDay, maxPerWeek)) {
-                  validBlock = false; break;
-                }
-              }
-
-              if (validBlock) {
-                // Place Lab Block
-                for (let k = 0; k < duration; k++) {
-                  slots[d][p + k] = {
-                    subject: s._id,
-                    faculty: faculty._id,
-                    subjectName: s.name + ' (Lab)',
-                    facultyName: faculty.name,
-                    roomNumber: roomNumber || '',
-                    type: 'Lab'
-                  };
-                  // Update counters
-                  const key = `${d}-${p + k}`;
-                  if (!globalAvailability.has(facultyId)) globalAvailability.set(facultyId, new Set());
-                  globalAvailability.get(facultyId).add(key);
-                  facultyTotalUsed.set(facultyId, (facultyTotalUsed.get(facultyId) || 0) + 1);
-
-                  // We don't strictly update "recordPlace" (theory count logic) because labs are different.
-                  // But we update subjectDayCount to maybe track total load.
-                  if (!subjectDayCount.has(sid)) subjectDayCount.set(sid, new Map());
-                  const m = subjectDayCount.get(sid);
-                  m.set(d, (m.get(d) || 0) + 1);
-                }
-                placed = true;
-                break; // Moves to next session
-              }
-            }
-            if (placed) break; // Moves to next session
-          }
-          if (!placed) {
-            sectionErrors.push(`Could not place Lab Session ${sess + 1} for "${s.name}".`);
-          }
+      }
+      const labSubjectNameByDay = new Map();
+      const candidatePairs = [];
+      if (periodsPerDay >= 7) {
+        candidatePairs.push([0, 1], [2, 3], [4, 5]);
+      } else {
+        for (let p = 0; p < periodsPerDay - 1; p++) {
+          candidatePairs.push([p, p + 1]);
         }
       }
 
-      // --- THEORY PLACEMENT ---
-      const subjectRequirements = deptSubjects
-        .map(s => ({ subject: s, periodsNeeded: s.periodsPerWeek, periodsAssigned: 0 }))
-        .sort((a, b) => b.periodsNeeded - a.periodsNeeded);
-
-      const dayIndices = [];
       for (let d = 0; d < workingDays.length; d++) {
-        // Reset daySubjectWithTwo for theory logic, preserving lab usage if we want?
-        // Actually, existing labs might have set 'subjectDayCount' > 0.
-        // We should respect that to avoid >2 theories if lab is already there?
-        // Let's check daySubjectWithTwo init
-        daySubjectWithTwo[d] = null;
-        // Check existing slots to populate daySubjectWithTwo if needed
-        for (let p = 0; p < periodsPerDay; p++) {
-          if (slots[d][p] && slots[d][p].subject) {
-            const sid = slots[d][p].subject.toString();
-            if (getSubjectCountOnDay(sid, d) >= 2) daySubjectWithTwo[d] = sid; // simple heuristic
-          }
-        }
+        const labCandidates = [...labSubjectByName.entries()]
+          .filter(([name]) => (labSessionsRemainingByName.get(name) || 0) > 0)
+          .sort((a, b) => (labSessionsRemainingByName.get(b[0]) || 0) - (labSessionsRemainingByName.get(a[0]) || 0));
+        if (labCandidates.length === 0) continue;
 
-        for (let p = 0; p < periodsPerDay; p++) {
-          if (!isBreakPeriod(breakPeriodIndices, d, p, periodsPerDay)) {
-            dayIndices.push({ d, p });
-          }
-        }
-      }
+        let placedLabToday = false;
+        for (const [normalized, subject] of labCandidates) {
+          if (placedLabToday) break;
+          const effectivePool = buildEffectivePool(subject, true);
+          if (effectivePool.length === 0) continue;
+          const targetSections = Math.min(desiredRowsPerSlot, effectivePool.length);
 
-      // Shuffle dayIndices
-      for (let i = dayIndices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [dayIndices[i], dayIndices[j]] = [dayIndices[j], dayIndices[i]];
-      }
+          for (const [p1, p2] of candidatePairs) {
+            if (isBreakPeriod(breakPeriodIndices, d, p1, periodsPerDay) || isBreakPeriod(breakPeriodIndices, d, p2, periodsPerDay)) continue;
+            if (slots[d][p1] || slots[d][p2]) continue;
 
-      for (const req of subjectRequirements) {
-        const subject = req.subject;
-        const sid = subject._id.toString();
-        const frList = facultyRoomsBySubject.get(sid);
-        let faculty, roomNumber;
-        if (frList && frList.length > 0) {
-          const idx = (sectionNum - 1) % frList.length;
-          faculty = frList[idx].faculty;
-          roomNumber = frList[idx].roomNumber || '';
-        } else {
-          faculty = subject.assignedFaculty;
-          roomNumber = '';
-        }
-        if (!faculty) {
-          if (!sectionErrors.includes(`Subject "${subject.name}" has no faculty/room allocation. Add Faculty & Room in Subjects.`))
-            sectionErrors.push(`Subject "${subject.name}" has no faculty/room allocation. Add Faculty & Room in Subjects.`);
-          continue;
-        }
+            const assignments = [];
+            let conflict = false;
+            for (let sec = 1; sec <= targetSections; sec++) {
+              const fr = effectivePool[sec - 1];
+              const faculty = fr.faculty;
+              const fid = (faculty._id || faculty).toString();
+              const key1 = `${d}-${p1}`;
+              const key2 = `${d}-${p2}`;
+              if ((globalAvailability.has(fid) && globalAvailability.get(fid).has(key1)) ||
+                  (globalAvailability.has(fid) && globalAvailability.get(fid).has(key2))) {
+                conflict = true;
+                break;
+              }
+              assignments.push({
+                sectionNumber: sec,
+                subject: subject._id,
+                subjectName: subject.name,
+                faculty: faculty._id || faculty,
+                facultyName: fr.facultyName || faculty.name || 'Unknown Faculty',
+                facultyId: fr.facultyId || faculty.facultyId || '',
+                roomNumber: fr.roomNumber || ''
+              });
+            }
+            if (conflict || assignments.length === 0) continue;
 
-        const facultyId = faculty._id.toString();
-        const maxPerDay = faculty.maxPeriodsPerDay || 6;
-        const maxPerWeek = faculty.maxPeriodsPerWeek || 30;
+            for (const a of assignments) {
+              const fid = a.faculty && a.faculty.toString ? a.faculty.toString() : null;
+              if (!fid) continue;
+              if (!globalAvailability.has(fid)) globalAvailability.set(fid, new Set());
+              globalAvailability.get(fid).add(`${d}-${p1}`);
+              globalAvailability.get(fid).add(`${d}-${p2}`);
+              facultyTotalUsed.set(fid, (facultyTotalUsed.get(fid) || 0) + 2);
+            }
 
-        let assigned = 0;
-        for (let k = 0; k < req.periodsNeeded; k++) {
-          let placed = false;
-          for (const { d, p } of dayIndices) {
-            if (slots[d][p]) continue; // Occupied (by Lab or other)
-            const countOnDay = getSubjectCountOnDay(sid, d);
-            const isSecondOnDay = countOnDay === 1;
-            if (!canPlaceSubjectOnDay(sid, d, isSecondOnDay)) continue;
-            if (!canPlaceFaculty(globalAvailability, facultyId, d, p, facultyTotalUsed, maxPerDay, maxPerWeek))
-              continue;
-
-            slots[d][p] = {
-              subject: subject._id,
-              faculty: faculty._id,
-              subjectName: subject.name,
-              facultyName: faculty.name,
-              roomNumber: roomNumber || ''
-            };
-            req.periodsAssigned++;
-            assigned++;
-            recordPlace(sid, d);
-
-            const key = `${d}-${p}`;
-            if (!globalAvailability.has(facultyId)) globalAvailability.set(facultyId, new Set());
-            globalAvailability.get(facultyId).add(key);
-            facultyTotalUsed.set(facultyId, (facultyTotalUsed.get(facultyId) || 0) + 1);
-            placed = true;
+            slots[d][p1] = { subject: subject._id, subjectName: `${subject.name} (Lab)`, type: 'Lab', assignments };
+            slots[d][p2] = { subject: subject._id, subjectName: `${subject.name} (Lab)`, type: 'Lab', assignments };
+            labSubjectNameByDay.set(d, normalized);
+            labSessionsRemainingByName.set(normalized, (labSessionsRemainingByName.get(normalized) || 0) - 1);
+            subjectUsageCount.set(subject._id.toString(), (subjectUsageCount.get(subject._id.toString()) || 0) + 2);
+            placedLabToday = true;
             break;
           }
-          if (!placed) {
-            sectionErrors.push(`No valid slot for "${subject.name}" (Faculty: ${faculty.name}) in Dept ${dept.name} Section ${sectionNum}.`);
-          }
         }
       }
 
-      // FILLER LOGIC (REMOVED or KEPT?)
-      // The original code had a "filler" loop at the end to try and fill remaining gaps with any subject.
-      // I'll keep it but adapted to respect new constraints if needed, or just copy the theory logic.
-      // Actually, standard practice is: First pass attempts to satisfy Requirements.
-      // If gaps remain, the original code tried to fill them with *more* of the existing subjects?
-      // "for (let d = 0; d < workingDays.length... let filled = false; for (const s of deptSubjects)..."
-      // This looks like it tries to fill empty slots with *extra* classes beyond requirements?
-      // Or maybe it was a fallback?
-      // "if (!filled) ... sectionErrors.push..."
-      // It seems it was trying to fill EVERY slot.
-      // That's aggressive. I'll retain a simplified version that tries to fill empty slots with any valid subject if possible,
-      // but only if you want a FULL timetable.
-      // The original code seemingly forced a full grid. I will keep it but respect lab blocks won't be used as fillers.
-
       for (let d = 0; d < workingDays.length; d++) {
+        const subjectsUsedToday = new Set();
+        const subjectDayCount = new Map();
+        const shuffledToday = shuffle(subjectBase);
+        const dayRank = new Map(shuffledToday.map((s, idx) => [s._id.toString(), idx]));
+
         for (let p = 0; p < periodsPerDay; p++) {
-          if (slots[d][p]) continue;
           if (isBreakPeriod(breakPeriodIndices, d, p, periodsPerDay)) continue;
+          if (slots[d][p]) continue; // already occupied by lab
 
-          // Try to fill with any subject (Theory only probably?)
-          let filled = false;
-          for (const s of deptSubjects) {
-            // Skip Lab filling in single slots? 
-            // If it's a "Theory + Lab" subject, we can add more Theory slots here.
+          const key = `${d}-${p}`;
+          let placed = false;
 
-            const sid = s._id.toString();
-            const frList = facultyRoomsBySubject.get(sid);
-            let faculty, roomNumber;
-            if (frList && frList.length > 0) {
-              const idx = (sectionNum - 1) % frList.length;
-              faculty = frList[idx].faculty;
-              roomNumber = frList[idx].roomNumber || '';
-            } else {
-              faculty = s.assignedFaculty;
-              roomNumber = '';
+          const orderedSubjects = [...subjectBase].sort((a, b) => {
+            const aId = a._id.toString();
+            const bId = b._id.toString();
+            const aUsedToday = subjectsUsedToday.has(aId) ? 1 : 0;
+            const bUsedToday = subjectsUsedToday.has(bId) ? 1 : 0;
+            if (aUsedToday !== bUsedToday) return aUsedToday - bUsedToday;
+            const aDayCount = subjectDayCount.get(aId) || 0;
+            const bDayCount = subjectDayCount.get(bId) || 0;
+            if (aDayCount !== bDayCount) return aDayCount - bDayCount;
+            const aCount = subjectUsageCount.get(aId) || 0;
+            const bCount = subjectUsageCount.get(bId) || 0;
+            if (aCount !== bCount) return aCount - bCount;
+            const aRank = dayRank.get(aId) ?? 0;
+            const bRank = dayRank.get(bId) ?? 0;
+            if (aRank !== bRank) return aRank - bRank;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+          });
+
+          for (let tryIdx = 0; tryIdx < orderedSubjects.length && !placed; tryIdx++) {
+            const subject = orderedSubjects[tryIdx];
+            const sid = subject._id.toString();
+            const usedTodayForSubject = subjectDayCount.get(sid) || 0;
+            if (usedTodayForSubject >= maxSameSubjectPerDay) continue;
+
+            const normalizedName = getNormalizedName(subject);
+            if (labSubjectNameByDay.get(d) === normalizedName) continue;
+
+            const effectivePool = buildEffectivePool(subject, false);
+
+            if (effectivePool.length < 1) continue;
+
+            const assignments = [];
+            // Do not rotate faculty-room mapping across slots.
+            const offset = 0;
+            let conflict = false;
+
+            const targetSections = Math.min(desiredRowsPerSlot, effectivePool.length);
+            for (let sec = 1; sec <= targetSections; sec++) {
+              const fr = effectivePool[(sec - 1 + offset) % effectivePool.length];
+              const faculty = fr.faculty;
+              const fid = (faculty._id || faculty).toString();
+              if (globalAvailability.has(fid) && globalAvailability.get(fid).has(key)) {
+                conflict = true;
+                break;
+              }
+              assignments.push({
+                sectionNumber: sec,
+                subject: subject._id,
+                subjectName: subject.name,
+                faculty: faculty._id || faculty,
+                facultyName: fr.facultyName || faculty.name || 'Unknown Faculty',
+                facultyId: fr.facultyId || faculty.facultyId || '',
+                roomNumber: fr.roomNumber || ''
+              });
             }
-            if (!faculty) continue;
 
-            const countOnDay = getSubjectCountOnDay(sid, d);
-            // Relax "2 per day" for fillers? Original code checked canPlaceSubjectOnDay.
-            const isSecondOnDay = countOnDay === 1;
-            if (!canPlaceSubjectOnDay(sid, d, isSecondOnDay)) continue;
-
-            const facultyId = faculty._id.toString();
-            // Check faculty limits
-            const maxPerDay = faculty.maxPeriodsPerDay || 6;
-            const maxPerWeek = faculty.maxPeriodsPerWeek || 30;
-            if (!canPlaceFaculty(globalAvailability, facultyId, d, p, facultyTotalUsed, maxPerDay, maxPerWeek)) continue;
-
-            slots[d][p] = {
-              subject: s._id,
-              faculty: faculty._id,
-              subjectName: s.name,
-              facultyName: faculty.name,
-              roomNumber: roomNumber || ''
-            };
-            recordPlace(sid, d);
-            const key = `${d}-${p}`;
-            if (!globalAvailability.has(facultyId)) globalAvailability.set(facultyId, new Set());
-            globalAvailability.get(facultyId).add(key);
-            facultyTotalUsed.set(facultyId, (facultyTotalUsed.get(facultyId) || 0) + 1);
-            filled = true;
-            break;
+            if (!conflict && assignments.length > 0) {
+              for (const a of assignments) {
+                const fid = (a.faculty && a.faculty.toString) ? a.faculty.toString() : null;
+                if (fid) {
+                  if (!globalAvailability.has(fid)) globalAvailability.set(fid, new Set());
+                  globalAvailability.get(fid).add(key);
+                  facultyTotalUsed.set(fid, (facultyTotalUsed.get(fid) || 0) + 1);
+                }
+              }
+              slots[d][p] = { subject: subject._id, subjectName: subject.name, type: 'Theory', assignments };
+              subjectsUsedToday.add(sid);
+              subjectDayCount.set(sid, (subjectDayCount.get(sid) || 0) + 1);
+              subjectUsageCount.set(sid, (subjectUsageCount.get(sid) || 0) + 1);
+              placed = true;
+            }
           }
-          if (!filled) {
-            // sectionErrors.push(`Could not fill slot day ${d} period ${p}.`); 
-            // Don't error strictly on fillers, maybe? Original did.
+
+          if (!placed) {
+            sectionErrors.push(`Could not fill slot (${d},${p}) with one subject. Check faculty mapping/availability.`);
           }
         }
       }
 
       let timetable = await Timetable.findOne({
         department: dept._id,
-        sectionNumber: sectionNum,
         semester: semNum
       });
-
       if (!timetable) {
         timetable = new Timetable({
           department: dept._id,
-          sectionNumber: sectionNum,
           semester: semNum,
+          sectionsCount,
           workingDays,
           periodsPerDay,
           slots: [],
@@ -497,6 +599,7 @@ async function generateTimetablesForSemester(semester, options = {}) {
       }
 
       timetable.slots = slots;
+      timetable.sectionsCount = sectionsCount;
       timetable.workingDays = workingDays;
       timetable.periodsPerDay = periodsPerDay;
       timetable.generationErrors = sectionErrors;
@@ -504,9 +607,360 @@ async function generateTimetablesForSemester(semester, options = {}) {
       timetable.updatedAt = new Date();
       await timetable.save();
       generated.push(timetable);
+
       if (sectionErrors.length > 0) {
-        errors.push(...sectionErrors.map(e => `[${dept.name} Sec ${sectionNum}] ${e}`));
+        errors.push(...sectionErrors.map((e) => `[${dept.name}] ${e}`));
       }
+      continue;
+    }
+    const subjectDayCount = new Map();
+
+    function getSubjectCountOnDay(sid, d) {
+      if (!subjectDayCount.has(sid)) return 0;
+      return subjectDayCount.get(sid).get(d) || 0;
+    }
+    function canPlaceSubjectOnDay(sid, d) {
+      if (getSubjectCountOnDay(sid, d) >= 2) return false;
+      return true;
+    }
+    function recordPlace(sid, d) {
+      if (!subjectDayCount.has(sid)) subjectDayCount.set(sid, new Map());
+      const m = subjectDayCount.get(sid);
+      m.set(d, (m.get(d) || 0) + 1);
+    }
+
+    // Seed subject/day counters from any already-filled cells in `slots`
+    // (e.g., Monday-only input that we want to expand).
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        const slot = slots[d][p];
+        if (slot && slot.subject) {
+          recordPlace(slot.subject.toString(), d);
+        }
+      }
+    }
+
+    function canPlaceSubjectForAllSections(subject, d, p, duration = 1, isLab = false) {
+      const sid = subject._id.toString();
+      const frList = facultyRoomsBySubject.get(sid);
+      const uniqueFr = dedupeFacultyRoomEntries(frList || []);
+      const poolSize = uniqueFr.length || (subject.assignedFaculty ? 1 : 0);
+
+      if (sectionsCount > 1 && poolSize < sectionsCount) return false;
+
+      const uniqueFaculties = new Set();
+      const facultyData = new Map();
+
+      for (let sec = 1; sec <= sectionsCount; sec++) {
+        let faculty;
+        if (frList && frList.length > 0) {
+          const idx = (sec - 1) % uniqueFr.length;
+          faculty = uniqueFr[idx].faculty;
+        } else {
+          faculty = subject.assignedFaculty;
+        }
+        if (!faculty) return false;
+
+        const fid = faculty._id ? faculty._id.toString() : faculty.toString();
+        if (!uniqueFaculties.has(fid)) {
+          uniqueFaculties.add(fid);
+          facultyData.set(fid, faculty);
+        }
+      }
+      if (sectionsCount > 1 && uniqueFaculties.size < sectionsCount) return false;
+
+      for (const fid of uniqueFaculties) {
+        const faculty = facultyData.get(fid);
+        const maxPerDay = faculty.maxPeriodsPerDay || 6;
+        const maxPerWeek = faculty.maxPeriodsPerWeek || 30;
+
+        // Check aggregate week limit
+        if ((facultyTotalUsed.get(fid) || 0) + duration > maxPerWeek) return false;
+        
+        // Check aggregate day limit
+        const dayCount = getFacultyCountOnDay(globalAvailability, fid, d);
+        if (dayCount + duration > maxPerDay) return false;
+
+        for (let k = 0; k < duration; k++) {
+          const key = `${d}-${p + k}`;
+          if (globalAvailability.has(fid) && globalAvailability.get(fid).has(key)) return false;
+        }
+      }
+      return true;
+    }
+
+    function buildAssignments(subject, isLab = false) {
+      const sid = subject._id.toString();
+      const frList = facultyRoomsBySubject.get(sid);
+      const uniqueFr = dedupeFacultyRoomEntries(frList || []);
+      const assignments = [];
+
+      for (let sec = 1; sec <= sectionsCount; sec++) {
+        let faculty, roomNumber;
+        if (uniqueFr.length > 0) {
+          const idx = (sec - 1) % uniqueFr.length;
+          faculty = uniqueFr[idx].faculty;
+          roomNumber = isLab ? (uniqueFr[idx].labRoomNumber || uniqueFr[idx].roomNumber || '') : (uniqueFr[idx].roomNumber || '');
+        } else {
+          faculty = subject.assignedFaculty;
+          roomNumber = '';
+        }
+        if (!faculty) break;
+        assignments.push({
+          sectionNumber: sec,
+          subject: subject._id,
+          subjectName: subject.name,
+          faculty: faculty._id || faculty,
+          facultyName: faculty.name || 'Unknown Faculty',
+          facultyId: faculty.facultyId || '',
+          roomNumber: roomNumber
+        });
+      }
+      return assignments;
+    }
+
+    function recordFacultyUsage(assignments, d, p, duration = 1) {
+      const uniqueFaculties = new Set();
+      for (const a of assignments) {
+        if (a.faculty) {
+          uniqueFaculties.add(a.faculty.toString());
+        }
+      }
+
+      for (const facultyId of uniqueFaculties) {
+        for (let k = 0; k < duration; k++) {
+          const key = `${d}-${p + k}`;
+          if (!globalAvailability.has(facultyId)) {
+            globalAvailability.set(facultyId, new Set());
+          }
+          globalAvailability.get(facultyId).add(key);
+          facultyTotalUsed.set(facultyId, (facultyTotalUsed.get(facultyId) || 0) + 1);
+        }
+      }
+    }
+
+    // Lab Placement
+    const labSubjects = deptSubjects.filter(s => s.courseType === 'Theory + Lab');
+    const existingLabPeriodsBySid = new Map();
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        const slot = slots[d][p];
+        if (slot && slot.subject && slot.type === 'Lab') {
+          const sid = slot.subject.toString();
+          existingLabPeriodsBySid.set(sid, (existingLabPeriodsBySid.get(sid) || 0) + 1);
+        }
+      }
+    }
+
+    for (const s of labSubjects) {
+      const sessionsNeeded = s.labSessionsPerWeek || 0;
+      const duration = s.labDuration || 2;
+      const sid = s._id.toString();
+
+      const frList = facultyRoomsBySubject.get(sid);
+      if ((!frList || frList.length === 0) && !s.assignedFaculty) {
+        sectionErrors.push(`Lab Subject "${s.name}" has no faculty. Add Faculty.`);
+        continue;
+      }
+
+      const existingLabPeriods = existingLabPeriodsBySid.get(sid) || 0;
+      const existingSessions = Math.floor(existingLabPeriods / duration);
+      const sessionsToPlace = Math.max(0, sessionsNeeded - existingSessions);
+
+      for (let sess = 0; sess < sessionsToPlace; sess++) {
+        let placed = false;
+        const daysShuffled = Array.from({ length: workingDays.length }, (_, i) => i).sort(() => Math.random() - 0.5);
+
+        for (const d of daysShuffled) {
+          for (let p = 0; p <= periodsPerDay - duration; p++) {
+            let validBlock = true;
+            for (let k = 0; k < duration; k++) {
+              if (slots[d][p + k]) { validBlock = false; break; }
+              if (isBreakPeriod(breakPeriodIndices, d, p + k, periodsPerDay)) { validBlock = false; break; }
+            }
+            if (!validBlock) continue;
+
+            if (!canPlaceSubjectForAllSections(s, d, p, duration, true)) {
+              continue;
+            }
+
+            const assignments = buildAssignments(s, true);
+
+            for (let k = 0; k < duration; k++) {
+              slots[d][p + k] = {
+                subject: s._id,
+                subjectName: s.name + ' (Lab)',
+                type: 'Lab',
+                assignments: assignments
+              };
+            }
+
+            recordFacultyUsage(assignments, d, p, duration);
+            if (!subjectDayCount.has(sid)) subjectDayCount.set(sid, new Map());
+            const m = subjectDayCount.get(sid);
+            m.set(d, (m.get(d) || 0) + 1);
+
+            placed = true;
+            break;
+          }
+          if (placed) break;
+        }
+        if (!placed) {
+          sectionErrors.push(`Could not place Lab Session ${sess + 1} for "${s.name}". Faculties likely booked or day limits exceeded.`);
+        }
+      }
+    }
+
+    // Theory Placement
+    const labAssignments = new Map(); // sid -> total periods
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        const slot = slots[d][p];
+        if (slot && slot.subject && slot.type === 'Lab') {
+          const sid = slot.subject.toString();
+          labAssignments.set(sid, (labAssignments.get(sid) || 0) + 1);
+        }
+      }
+    }
+
+    const theoryPeriodsBySid = new Map();
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        const slot = slots[d][p];
+        if (slot && slot.subject && slot.type === 'Theory') {
+          const sid = slot.subject.toString();
+          theoryPeriodsBySid.set(sid, (theoryPeriodsBySid.get(sid) || 0) + 1);
+        }
+      }
+    }
+
+    const subjectRequirements = deptSubjects
+      .map(s => {
+        const sid = s._id.toString();
+        const labPeriods = labAssignments.get(sid) || 0;
+        const totalTheoryNeeded = Math.max(0, s.periodsPerWeek - labPeriods);
+        const existingTheoryPeriods = theoryPeriodsBySid.get(sid) || 0;
+        const remainingTheoryNeeded = Math.max(0, totalTheoryNeeded - existingTheoryPeriods);
+        return { subject: s, periodsNeeded: remainingTheoryNeeded, periodsAssigned: 0 };
+      })
+      .filter(req => req.periodsNeeded > 0)
+      .sort((a, b) => b.periodsNeeded - a.periodsNeeded);
+
+    const dayIndices = [];
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        if (!isBreakPeriod(breakPeriodIndices, d, p, periodsPerDay)) {
+          dayIndices.push({ d, p });
+        }
+      }
+    }
+
+    for (let i = dayIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [dayIndices[i], dayIndices[j]] = [dayIndices[j], dayIndices[i]];
+    }
+
+    for (const req of subjectRequirements) {
+      const subject = req.subject;
+      const sid = subject._id.toString();
+
+      let assigned = 0;
+      for (let k = 0; k < req.periodsNeeded; k++) {
+        let placed = false;
+        for (const { d, p } of dayIndices) {
+          if (slots[d][p]) continue;
+
+          if (!canPlaceSubjectOnDay(sid, d)) continue;
+
+          if (!canPlaceSubjectForAllSections(subject, d, p, 1, false)) continue;
+
+          const assignments = buildAssignments(subject, false);
+
+          slots[d][p] = {
+            subject: subject._id,
+            subjectName: subject.name,
+            type: 'Theory',
+            assignments: assignments
+          };
+
+          req.periodsAssigned++;
+          assigned++;
+          recordPlace(sid, d);
+          recordFacultyUsage(assignments, d, p, 1);
+          placed = true;
+          break;
+        }
+        if (!placed) {
+          const hasFaculty = (subject.assignedFaculty || facultyRoomsBySubject.has(sid));
+          if (!hasFaculty) {
+            if (!sectionErrors.includes(`Subject "${subject.name}" has no faculty allocation.`))
+              sectionErrors.push(`Subject "${subject.name}" has no faculty allocation.`);
+          } else {
+            sectionErrors.push(`No valid slot for "${subject.name}" (Dept ${dept.name}). Facult(y/ies) may be booked or limits exceeded.`);
+          }
+        }
+      }
+    }
+
+    // Filler Logic
+    for (let d = 0; d < workingDays.length; d++) {
+      for (let p = 0; p < periodsPerDay; p++) {
+        if (slots[d][p]) continue;
+        if (isBreakPeriod(breakPeriodIndices, d, p, periodsPerDay)) continue;
+
+        let filled = false;
+        for (const s of deptSubjects) {
+          const sid = s._id.toString();
+
+          if (!canPlaceSubjectOnDay(sid, d)) continue;
+
+          if (!canPlaceSubjectForAllSections(s, d, p, 1, false)) continue;
+
+          const assignments = buildAssignments(s, false);
+
+          slots[d][p] = {
+            subject: s._id,
+            subjectName: s.name,
+            type: 'Theory',
+            assignments: assignments
+          };
+          recordPlace(sid, d);
+          recordFacultyUsage(assignments, d, p, 1);
+          filled = true;
+          break;
+        }
+      }
+    }
+
+    let timetable = await Timetable.findOne({
+      department: dept._id,
+      semester: semNum
+    });
+
+    if (!timetable) {
+      timetable = new Timetable({
+        department: dept._id,
+        semester: semNum,
+        sectionsCount: sectionsCount,
+        workingDays,
+        periodsPerDay,
+        slots: [],
+        generationErrors: []
+      });
+    }
+
+    timetable.slots = slots;
+    timetable.sectionsCount = sectionsCount;
+    timetable.workingDays = workingDays;
+    timetable.periodsPerDay = periodsPerDay;
+    timetable.generationErrors = sectionErrors;
+    timetable.generatedAt = new Date();
+    timetable.updatedAt = new Date();
+    await timetable.save();
+    generated.push(timetable);
+
+    if (sectionErrors.length > 0) {
+      errors.push(...sectionErrors.map(e => `[${dept.name}] ${e}`));
     }
   }
 

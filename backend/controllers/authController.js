@@ -51,6 +51,9 @@ async function login(req, res) {
               name: faculty.name,
               passwordHash: null
             });
+          } else if (user.name !== faculty.name) {
+            user.name = faculty.name;
+            await user.save();
           }
         }
 
@@ -147,6 +150,9 @@ async function login(req, res) {
           email: faculty.email || null,
           passwordHash: null
         });
+      } else if (user.name !== faculty.name) {
+        user.name = faculty.name;
+        await user.save();
       }
     } else if (role === 'student') {
       const { email, departmentId, sectionNumber, password } = req.body;

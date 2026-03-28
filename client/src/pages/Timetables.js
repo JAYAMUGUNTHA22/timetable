@@ -9,7 +9,7 @@ function Timetables() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [semester, setSemester] = useState(1);
-  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(true);
   const [message, setMessage] = useState(null);
   const [filterSemester, setFilterSemester] = useState('');
   const navigate = useNavigate();
@@ -123,7 +123,7 @@ function Timetables() {
             Regenerate all (replace existing timetables for this semester)
           </label>
         </form>
-        <p className="generate-hint">By default, only creates timetables for departments/sections that don&apos;t have one yet. Existing timetables are never changed so faculty can rely on their schedule. Use the same semester as your subjects (e.g. if subjects are Semester 3, select 3). To replace all timetables for the semester, check &quot;Regenerate all&quot; above.</p>
+        <p className="generate-hint">Use the same semester as your subjects. <strong>Regenerate all</strong> is checked by default to create fresh timetables with 4 different faculty per cell and all subjects allocated. For 4 faculty per cell, set Department sections to 4 and add multiple faculty per subject in Subjects → Faculty &amp; Room.</p>
       </div>
 
       <div className="filter-bar">

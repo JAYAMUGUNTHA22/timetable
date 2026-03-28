@@ -14,7 +14,9 @@ function DepartmentTimetables() {
         setError(null);
         setLoading(true);
         selfApi.departmentTimetables(sem)
-            .then((data) => setTimetables(Array.isArray(data) ? data : []))
+            .then((data) => {
+                setTimetables(Array.isArray(data) ? data : []);
+            })
             .catch((err) => setError(err.message || 'Failed to load department timetables.'))
             .finally(() => setLoading(false));
     };
@@ -61,7 +63,7 @@ function DepartmentTimetables() {
                     {timetables.map((tt) => (
                         <div key={tt._id} className="card tt-section-card">
                             <div className="card-header">
-                                <h3>{tt.department?.name} - Section {tt.sectionNumber}</h3>
+                                <h3>{tt.department?.name} Department (All Sections)</h3>
                             </div>
                             <div className="table-wrap mini-table">
                                 <table>
@@ -78,8 +80,30 @@ function DepartmentTimetables() {
                                             <tr key={day}>
                                                 <th>{day}</th>
                                                 {tt.slots[d]?.map((slot, p) => (
-                                                    <td key={p} className={slot?.courseType === 'Theory + Lab' ? 'slot-lab' : ''}>
-                                                        {slot?.subjectName || '-'}
+                                                    <td key={p} className={slot?.type === 'Lab' ? 'slot-lab' : ''}>
+                                                        {slot && slot.assignments?.length ? (
+                                                            (() => {
+                                                              const bySubject = {};
+                                                              (slot.assignments || []).forEach(a => {
+                                                                const name = a.subjectName || slot.subjectName || '-';
+                                                                if (!bySubject[name]) bySubject[name] = [];
+                                                                bySubject[name].push(a);
+                                                              });
+                                                              return Object.entries(bySubject).map(([subjName, arr]) => (
+                                                                <div key={subjName} style={{ marginBottom: '4px' }}>
+                                                                  <div style={{ fontWeight: 'bold', fontSize: '0.7rem', marginBottom: '1px' }}>
+                                                                    {subjName}
+                                                                    {slot?.type === 'Lab' ? ' (LAB)' : ''}
+                                                                  </div>
+                                                                  {arr.map(a => (
+                                                                    <div key={a.sectionNumber} style={{ fontSize: '0.65rem', color: '#555', lineHeight: 1.15 }}>
+                                                                      {a.facultyName}{a.facultyId ? ` (${a.facultyId})` : ''}{a.roomNumber ? ` - ${a.roomNumber}` : ''}
+                                                                    </div>
+                                                                  ))}
+                                                                </div>
+                                                              ));
+                                                            })()
+                                                        ) : <span className="muted">—</span>}
                                                     </td>
                                                 ))}
                                             </tr>

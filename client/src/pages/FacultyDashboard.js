@@ -6,11 +6,12 @@ import './StudentDashboard.css';
 function FacultyDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const facultyName = user?.name || "Faculty";
 
   return (
     <div className="user-dashboard">
       <div className="user-dashboard__welcome">
-        <h1>Welcome, {user?.name || 'Faculty'}!</h1>
+        <h1>Welcome, {facultyName}!</h1>
         <p>Access your teaching schedule, leave calendar, and department timetables below.</p>
       </div>
 
@@ -50,3 +51,5 @@ function FacultyDashboard() {
 }
 
 export default FacultyDashboard;
+
+

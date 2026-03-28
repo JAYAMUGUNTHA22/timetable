@@ -31,7 +31,7 @@ const getTimetables = async (req, res) => {
     if (req.query.department) filter.department = req.query.department;
     const timetables = await Timetable.find(filter)
       .populate('department', 'name departmentId')
-      .sort({ department: 1, sectionNumber: 1 });
+      .sort({ department: 1 });
     res.json(timetables);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -70,6 +70,7 @@ const generateTimetables = async (req, res) => {
         message += ' No timetable for: ' + skippedDepartments.map(d => d.name + ' (' + d.reason + ')').join('; ') + '.';
       }
     }
+    message += ` [generator=uniform-sections-v3 at ${new Date().toISOString()}]`;
     res.json({
       message,
       timetables: timetables || [],
@@ -86,16 +87,25 @@ const generateTimetables = async (req, res) => {
 const updateTimetableSlot = async (req, res) => {
   try {
     const { id } = req.params;
-    const { dayIndex, periodIndex, subject, faculty, subjectName, facultyName, roomNumber } = req.body;
+    const { dayIndex, periodIndex, subject, subjectName, assignments, type } = req.body;
     const timetable = await Timetable.findById(id);
     if (!timetable) return res.status(404).json({ error: 'Timetable not found' });
     if (!timetable.slots[dayIndex]) timetable.slots[dayIndex] = [];
+    const slotAssignments = (assignments || []).map(a => ({
+      sectionNumber: a.sectionNumber,
+      subject: a.subject || null,
+      subjectName: a.subjectName || '',
+      faculty: a.faculty || null,
+      facultyName: a.facultyName || '',
+      facultyId: a.facultyId || '',
+      roomNumber: a.roomNumber || ''
+    }));
+    const first = slotAssignments[0];
     timetable.slots[dayIndex][periodIndex] = {
-      subject: subject || null,
-      faculty: faculty || null,
-      subjectName: subjectName || '',
-      facultyName: facultyName || '',
-      roomNumber: roomNumber || ''
+      subject: subject || first?.subject || null,
+      subjectName: subjectName || first?.subjectName || '',
+      type: type || 'Theory',
+      assignments: slotAssignments
     };
     timetable.updatedAt = new Date();
     await timetable.save();

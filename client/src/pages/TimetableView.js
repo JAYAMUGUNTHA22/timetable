@@ -23,16 +23,14 @@ function TimetableView() {
     subjectsApi.getAll().then(setSubjects).catch(() => []);
   }, [id]);
 
-  const handleSlotSave = (dayIndex, periodIndex, subjectId, facultyId, subjectName, facultyName, roomNumber) => {
+  const handleSlotSave = (dayIndex, periodIndex, assignments) => {
     setMessage(null);
+    const type = 'Theory';
     timetablesApi.updateSlot(id, {
       dayIndex,
       periodIndex,
-      subject: subjectId || null,
-      faculty: facultyId || null,
-      subjectName: subjectName || '',
-      facultyName: facultyName || '',
-      roomNumber: roomNumber || ''
+      type,
+      assignments: assignments || []
     })
       .then(setTimetable)
       .then(() => { setEditing(null); setMessage({ type: 'success', text: 'Slot updated.' }); })
@@ -60,7 +58,7 @@ function TimetableView() {
           ← Back
         </button>
         <div>
-          <h1>{timetable.department?.name || 'Department'} — Section {timetable.sectionNumber}</h1>
+          <h1>{timetable.department?.name || 'Department'} (All Sections)</h1>
           <p className="view-meta">Semester {timetable.semester} · Generated {timetable.generatedAt ? new Date(timetable.generatedAt).toLocaleString() : '-'}</p>
         </div>
       </div>
@@ -104,10 +102,11 @@ function TimetableView() {
                       <td key={key} className="slot-cell slot-edit">
                         <SlotEditor
                           slot={slot}
+                          timetable={timetable}
                           faculty={faculty}
                           subjects={subjects}
-                          onSave={(subId, facId, subName, facName, roomNumber) =>
-                            handleSlotSave(d, p, subId, facId, subName, facName, roomNumber)
+                          onSave={(assignments) =>
+                            handleSlotSave(d, p, assignments)
                           }
                           onCancel={() => setEditing(null)}
                         />
@@ -118,18 +117,33 @@ function TimetableView() {
                   return (
                     <td
                       key={key}
-                      className="slot-cell"
+                      className={`slot-cell ${slot?.type === 'Lab' ? 'slot-lab' : ''}`}
                       onClick={() => setEditing({ d, p })}
                       title="Click to edit"
                     >
-                      {slot && (slot.subjectName || slot.facultyName) ? (
-                        <div className="slot-content">
-                          <div className="slot-subject">{slot.subjectName || '-'}</div>
-                          <div className="slot-faculty">
-                            {slot.facultyName
-                              ? (slot.roomNumber ? slot.facultyName + ' (Room ' + slot.roomNumber + ')' : slot.facultyName)
-                              : (slot.subjectName === 'Free' ? 'Free' : '')}
-                          </div>
+                      {slot && (slot.assignments && slot.assignments.length > 0) ? (
+                        <div className="slot-content slot-content-compact">
+                          {(() => {
+                            const bySubject = {};
+                            (slot.assignments || []).forEach(a => {
+                              const name = a.subjectName || slot.subjectName || '-';
+                              if (!bySubject[name]) bySubject[name] = [];
+                              bySubject[name].push(a);
+                            });
+                            return Object.entries(bySubject).map(([subjName, arr]) => (
+                              <div key={subjName} style={{ marginBottom: arr.length > 1 ? '6px' : 0 }}>
+                                <div className="slot-subject" style={{ fontWeight: 'bold', fontSize: '0.8rem', marginBottom: '2px' }}>
+                                  {subjName}
+                                  {slot?.type === 'Lab' ? <span className="lab-chip"> LAB</span> : null}
+                                </div>
+                                {arr.map(a => (
+                                  <div key={a.sectionNumber} style={{ fontSize: '0.75rem', color: '#444', lineHeight: 1.25 }}>
+                                    {a.facultyName || '-'}{a.facultyId ? ` (${a.facultyId})` : ''}{a.roomNumber ? ` - ${a.roomNumber}` : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            ));
+                          })()}
                         </div>
                       ) : (
                         <span className="slot-empty">—</span>
@@ -146,50 +160,98 @@ function TimetableView() {
   );
 }
 
-function SlotEditor({ slot, faculty, subjects, onSave, onCancel }) {
-  const [subjectId, setSubjectId] = useState(slot?.subject?._id || slot?.subject || '');
-  const [facultyId, setFacultyId] = useState(slot?.faculty?._id || slot?.faculty || '');
-  const [roomNumber, setRoomNumber] = useState(slot?.roomNumber || '');
+function SlotEditor({ slot, timetable, faculty, subjects, onSave, onCancel }) {
+  const [assignments, setAssignments] = useState(() => {
+    if (slot?.assignments && slot.assignments.length > 0) {
+      return slot.assignments.map(a => ({
+        sectionNumber: a.sectionNumber,
+        subject: a.subject?._id || a.subject || '',
+        subjectName: a.subjectName || '',
+        faculty: a.faculty?._id || a.faculty || '',
+        facultyName: a.facultyName || '',
+        facultyId: a.facultyId || '',
+        roomNumber: a.roomNumber || ''
+      }));
+    } else {
+      const count = timetable.sectionsCount || 1;
+      return Array.from({ length: count }, (_, i) => ({
+        sectionNumber: i + 1,
+        subject: '',
+        subjectName: '',
+        faculty: '',
+        facultyName: '',
+        facultyId: '',
+        roomNumber: ''
+      }));
+    }
+  });
 
-  const subject = subjects.find((s) => s._id === subjectId);
-  const fac = faculty.find((f) => f._id === facultyId);
-  const subjectName = subject?.name || '';
-  const facultyName = fac?.name || '';
+  const handleAssignmentChange = (idx, field, value) => {
+    const newAssig = [...assignments];
+    newAssig[idx] = { ...newAssig[idx], [field]: value };
+    if (field === 'subject') {
+      const subj = subjects.find(s => s._id === value);
+      newAssig[idx].subjectName = subj ? subj.name : '';
+    } else if (field === 'faculty') {
+      const fac = faculty.find(f => f._id === value);
+      newAssig[idx].facultyName = fac ? fac.name : '';
+      newAssig[idx].facultyId = fac ? (fac.facultyId || '') : '';
+    }
+    setAssignments(newAssig);
+  };
 
   const handleSave = () => {
-    onSave(subjectId || null, facultyId || null, subjectName, facultyName, roomNumber);
+    const toSave = assignments.map(a => ({
+      sectionNumber: a.sectionNumber,
+      subject: a.subject || null,
+      subjectName: a.subjectName || '',
+      faculty: a.faculty || null,
+      facultyName: a.facultyName || '',
+      facultyId: a.facultyId || '',
+      roomNumber: a.roomNumber || ''
+    }));
+    onSave(toSave);
   };
 
   return (
-    <div className="slot-editor">
-      <select
-        value={subjectId}
-        onChange={(e) => setSubjectId(e.target.value)}
-        className="slot-select"
-      >
-        <option value="">— None / Free —</option>
-        {subjects.map((s) => (
-          <option key={s._id} value={s._id}>{s.name} (Sem {s.semester})</option>
-        ))}
-      </select>
-      <select
-        value={facultyId}
-        onChange={(e) => setFacultyId(e.target.value)}
-        className="slot-select"
-      >
-        <option value="">— None —</option>
-        {faculty.map((f) => (
-          <option key={f._id} value={f._id}>{f.name}</option>
-        ))}
-      </select>
-      <input
-        type="text"
-        placeholder="Room no."
-        value={roomNumber}
-        onChange={(e) => setRoomNumber(e.target.value)}
-        className="slot-select"
-      />
-      <div className="slot-editor-actions">
+    <div className="slot-editor" style={{ minWidth: '280px' }}>
+      {assignments.map((a, idx) => (
+        <div key={idx} style={{ marginBottom: '10px', padding: '8px', background: '#f5f5f5', borderRadius: '4px' }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '4px' }}>Section {a.sectionNumber}</div>
+          <select
+            value={a.subject}
+            onChange={(e) => handleAssignmentChange(idx, 'subject', e.target.value)}
+            className="slot-select"
+            style={{ width: '100%', marginBottom: '4px', fontSize: '0.8rem', padding: '4px' }}
+          >
+            <option value="">— Subject —</option>
+            {subjects.map((s) => (
+              <option key={s._id} value={s._id}>{s.name} (Sem {s.semester})</option>
+            ))}
+          </select>
+          <select
+            value={a.faculty}
+            onChange={(e) => handleAssignmentChange(idx, 'faculty', e.target.value)}
+            className="slot-select"
+            style={{ width: '100%', marginBottom: '4px', fontSize: '0.8rem', padding: '4px' }}
+          >
+            <option value="">— Faculty —</option>
+            {faculty.map((f) => (
+              <option key={f._id} value={f._id}>{f.name}{f.facultyId ? ` (${f.facultyId})` : ''}</option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Room no."
+            value={a.roomNumber}
+            onChange={(e) => handleAssignmentChange(idx, 'roomNumber', e.target.value)}
+            className="slot-select"
+            style={{ width: '100%', fontSize: '0.8rem', padding: '4px' }}
+          />
+        </div>
+      ))}
+
+      <div className="slot-editor-actions" style={{ marginTop: '8px' }}>
         <button type="button" className="btn btn-sm btn-primary" onClick={handleSave}>Save</button>
         <button type="button" className="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
       </div>

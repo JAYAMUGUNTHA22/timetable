@@ -85,6 +85,10 @@
   text-align: center;
 }
 
+.slot-content-compact .slot-subject {
+  margin-bottom: 6px;
+}
+
 .slot-subject {
   font-weight: 500;
   color: var(--text-primary);
@@ -137,4 +141,16 @@
 .slot-lab {
   background-color: #f0f7ff;
   border-left: 3px solid #007bff;
+}
+
+.lab-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  color: #0b4a8b;
+  background: #dcecff;
+  border: 1px solid #9fc4f5;
 }

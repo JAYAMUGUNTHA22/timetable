@@ -1,11 +1,20 @@
 const mongoose = require('mongoose');
 
+const assignmentSchema = new mongoose.Schema({
+  sectionNumber: { type: Number, required: true },
+  subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
+  subjectName: String,
+  faculty: { type: mongoose.Schema.Types.ObjectId, ref: 'Faculty' },
+  facultyName: String,
+  facultyId: String,
+  roomNumber: String
+}, { _id: false });
+
 const slotSchema = new mongoose.Schema({
   subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
-  faculty: { type: mongoose.Schema.Types.ObjectId, ref: 'Faculty' },
   subjectName: String,
-  facultyName: String,
-  roomNumber: String
+  type: String,
+  assignments: [assignmentSchema]
 }, { _id: false });
 
 const timetableSchema = new mongoose.Schema({
@@ -14,14 +23,13 @@ const timetableSchema = new mongoose.Schema({
     ref: 'Department',
     required: true
   },
-  sectionNumber: {
-    type: Number,
-    required: true,
-    min: 1
-  },
   semester: {
     type: Number,
     required: true
+  },
+  sectionsCount: {
+    type: Number,
+    default: 1
   },
   workingDays: [String],
   periodsPerDay: Number,
@@ -31,6 +39,6 @@ const timetableSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-timetableSchema.index({ department: 1, sectionNumber: 1, semester: 1 }, { unique: true });
+timetableSchema.index({ department: 1, semester: 1 }, { unique: true });
 
 module.exports = mongoose.model('Timetable', timetableSchema);
