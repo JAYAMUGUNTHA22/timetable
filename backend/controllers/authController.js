@@ -10,6 +10,14 @@ const cookieOptions = {
   secure: false // set true if you serve over HTTPS
 };
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeNameForCompare(s) {
+  return String(s).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 async function login(req, res) {
   try {
     /* ================= GOOGLE LOGIN ================= */
@@ -137,19 +145,23 @@ async function login(req, res) {
       if (password !== 'bitsathy') {
         return res.status(401).json({ error: 'Invalid password.' });
       }
-      const faculty = await Faculty.findOne({ facultyId: facultyId.trim() });
-      if (!faculty || faculty.name.trim().toLowerCase() !== String(name).trim().toLowerCase()) {
+      const idTrim = facultyId.trim();
+      const faculty = await Faculty.findOne({
+        facultyId: new RegExp(`^${escapeRegex(idTrim)}$`, 'i')
+      });
+      if (!faculty || normalizeNameForCompare(faculty.name) !== normalizeNameForCompare(name)) {
         return res.status(401).json({ error: 'Faculty not found. Check ID and name.' });
       }
       user = await User.findOne({ role: 'faculty', faculty: faculty._id });
       if (!user) {
-        user = await User.create({
+        const newUser = {
           role: 'faculty',
           faculty: faculty._id,
           name: faculty.name,
-          email: faculty.email || null,
           passwordHash: null
-        });
+        };
+        if (faculty.email) newUser.email = faculty.email;
+        user = await User.create(newUser);
       } else if (user.name !== faculty.name) {
         user.name = faculty.name;
         await user.save();
