@@ -1,4 +1,6 @@
-const BASE = process.env.REACT_APP_API_URL || '/api';
+const BASE = process.env.REACT_APP_API_URL
+  ? `${process.env.REACT_APP_API_URL}/api`
+  : '/api';
 
 async function request(path, options = {}) {
   const url = `${BASE}${path}`;
