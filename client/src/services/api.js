@@ -2,6 +2,15 @@ const BASE = process.env.REACT_APP_API_URL
   ? `${process.env.REACT_APP_API_URL}/api`
   : '/api';
 
+function parseJsonResponse(raw) {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 async function request(path, options = {}) {
   const url = `${BASE}${path}`;
   const res = await fetch(url, {
@@ -9,8 +18,27 @@ async function request(path, options = {}) {
     credentials: 'include',
     ...options
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  const raw = await res.text();
+  const data = parseJsonResponse(raw);
+  if (!res.ok) {
+    if (data && typeof data === 'object' && data.error) {
+      throw new Error(data.error);
+    }
+    if (data === null && raw && raw.trim().startsWith('<')) {
+      throw new Error(
+        'Could not reach the API (got HTML instead of JSON). In Vercel, set REACT_APP_API_URL to your deployed backend URL (no trailing slash), then redeploy.'
+      );
+    }
+    throw new Error(
+      (data && data.error) ||
+        (res.status === 404
+          ? 'API not found. Set REACT_APP_API_URL to your backend base URL in production builds.'
+          : res.statusText || `HTTP ${res.status}`)
+    );
+  }
+  if (data === null) {
+    throw new Error('Invalid JSON from server.');
+  }
   return data;
 }
 

@@ -26,16 +26,20 @@ function Login() {
     facultyId: '',
     facultyName: '',
     studentEmail: '',
-    departmentId: '',
-    sectionNumber: 1
+    departmentId: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [departmentsError, setDepartmentsError] = useState(null);
 
   useEffect(() => {
+    setDepartmentsError(null);
     publicApi.getDepartments()
       .then(setDepartments)
-      .catch(err => console.error('Failed to load departments', err));
+      .catch((err) => {
+        console.error('Failed to load departments', err);
+        setDepartmentsError(err.message || 'Could not load departments.');
+      });
   }, []);
 
   const handleSubmit = async (e) => {
@@ -62,7 +66,7 @@ function Login() {
           role: 'student',
           email: form.studentEmail,
           departmentId: form.departmentId,
-          sectionNumber: Number(form.sectionNumber) || 1,
+          sectionNumber: 1,
           password: form.password
         };
       }
@@ -104,7 +108,7 @@ function Login() {
           role: 'student',
           email,
           departmentId: form.departmentId,
-          sectionNumber: Number(form.sectionNumber) || 1,
+          sectionNumber: 1,
           google: true
         };
       }
@@ -141,6 +145,9 @@ function Login() {
         <p className="login-subtitle">Choose your role and enter your details.</p>
 
         {error && <div className="alert alert-error">{error}</div>}
+        {departmentsError && role === 'student' && (
+          <div className="alert alert-error">{departmentsError}</div>
+        )}
 
         <div className="login-role-toggle">
           <button type="button" className={role === 'admin' ? 'active' : ''} onClick={() => setRole('admin')}>Admin</button>
@@ -220,40 +227,28 @@ function Login() {
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Department</label>
-                  <select
-                    required
-                    value={form.departmentId}
-                    onChange={(e) => setForm((prev) => ({ ...prev, departmentId: e.target.value }))}
-                    className="form-control"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '10px',
-                      border: '1px solid #ddd',
-                      fontSize: '13px',
-                      background: '#ffffff',
-                      color: '#222'
-                    }}
-                  >
-                    <option value="">Select Dept</option>
-                    {departments.map(d => (
-                      <option key={d._id} value={d._id}>{d.departmentId}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Section</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={form.sectionNumber}
-                    onChange={(e) => setForm((prev) => ({ ...prev, sectionNumber: e.target.value }))}
-                  />
-                </div>
+              <div className="form-group">
+                <label>Department</label>
+                <select
+                  required
+                  value={form.departmentId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, departmentId: e.target.value }))}
+                  className="form-control"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #ddd',
+                    fontSize: '13px',
+                    background: '#ffffff',
+                    color: '#222'
+                  }}
+                >
+                  <option value="">Select Dept</option>
+                  {departments.map(d => (
+                    <option key={d._id} value={d._id}>{d.departmentId}</option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Password</label>

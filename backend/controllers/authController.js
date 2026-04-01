@@ -6,8 +6,8 @@ const { signUser, COOKIE_NAME } = require('../middleware/auth');
 
 const cookieOptions = {
   httpOnly: true,
-  sameSite: 'lax',
-  secure: false // set true if you serve over HTTPS
+  sameSite: 'none',
+  secure: true
 };
 
 function escapeRegex(s) {
@@ -67,20 +67,22 @@ async function login(req, res) {
 
         // STUDENT GOOGLE LOGIN
         else if (role === 'student') {
-          if (!departmentId || !sectionNumber)
-            return res.status(400).json({ error: 'Select department & section first' });
+          if (!departmentId)
+            return res.status(400).json({ error: 'Select department first' });
 
           const dept = await Department.findById(departmentId);
           if (!dept) return res.status(400).json({ error: 'Department not found' });
 
-          user = await User.findOne({ role: 'student', email, department: dept._id, sectionNumber });
+          const secNum = Number(sectionNumber) || 1;
+
+          user = await User.findOne({ role: 'student', email, department: dept._id, sectionNumber: secNum });
           if (!user) {
             user = await User.create({
               role: 'student',
               email,
               name: name || email.split('@')[0],
               department: dept._id,
-              sectionNumber,
+              sectionNumber: secNum,
               passwordHash: null
             });
           }
@@ -168,22 +170,23 @@ async function login(req, res) {
       }
     } else if (role === 'student') {
       const { email, departmentId, sectionNumber, password } = req.body;
-      if (!email || !departmentId || !sectionNumber || !password) {
-        return res.status(400).json({ error: 'Email, department, section and password are required.' });
+      if (!email || !departmentId || !password) {
+        return res.status(400).json({ error: 'Email, department, and password are required.' });
       }
       if (password !== 'bitsathy') {
         return res.status(401).json({ error: 'Invalid password.' });
       }
+      const secNum = Number(sectionNumber) || 1;
       const dept = await Department.findById(departmentId);
       if (!dept) return res.status(400).json({ error: 'Department not found.' });
-      user = await User.findOne({ role: 'student', email, department: dept._id, sectionNumber });
+      user = await User.findOne({ role: 'student', email, department: dept._id, sectionNumber: secNum });
       if (!user) {
         user = await User.create({
           role: 'student',
           email,
           name: email.split('@')[0],
           department: dept._id,
-          sectionNumber,
+          sectionNumber: secNum,
           passwordHash: null
         });
       }

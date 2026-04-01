@@ -46,9 +46,19 @@ npm start
 
 The app runs at http://localhost:3000. The API runs at http://localhost:5000.
 
+**Frontend env (optional):** In `client`, create `.env` with `REACT_APP_API_URL=http://localhost:5000` so the browser calls the API explicitly (same as default proxy behavior when omitted). See `client/.env.example`.
+
 ### 3. MongoDB
 
 Ensure MongoDB is running. If using a remote URI, set `MONGODB_URI` in `backend/.env`.
+
+## Deployment (e.g. Vercel + separate API)
+
+The React app and the Express API are separate processes.
+
+1. **Deploy the backend** (Render, Railway, Fly.io, a VPS, etc.) with `MONGODB_URI` and `PORT` set. Use the **same MongoDB** (or restore data) as local if you expect the same departments and faculty.
+2. **Vercel (frontend only):** In the project settings → Environment Variables, set **`REACT_APP_API_URL`** to your backend’s **origin only** (example: `https://your-api.onrender.com` — **no** `/api` suffix). Redeploy after changing env vars.
+3. If **`REACT_APP_API_URL` is missing**, the client uses relative `/api`, which only works when the API is served from the **same host** as the SPA. On `*.vercel.app` that usually means departments stay empty and logins fail unless you point the env var at your real API.
 
 ## Usage
 

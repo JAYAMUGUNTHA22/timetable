@@ -18,7 +18,10 @@ const Subject = require('./models/Subject');
 const Timetable = require('./models/Timetable');
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: "https://timetable-voms.vercel.app", // your frontend URL
+  credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser());
 
