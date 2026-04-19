@@ -5,7 +5,8 @@
 }
 
 .layout--dashboard {
-  background: #ffffff;
+  /* Match admin dashboard ivory gradient (see Dashboard.css / dashboard-page) */
+  background: linear-gradient(180deg, #faf9f6 0%, #f5f3ef 100%);
 }
 
 .layout--login {
@@ -77,9 +78,9 @@
   margin: 0 auto;
 }
 
-/* Dashboard route: entire content area white, no container */
+/* Dashboard route: same soft background as layout—no white strip behind cards */
 .main--dashboard {
-  background: #ffffff;
+  background: transparent;
   min-height: calc(100vh - 56px);
 }
 
