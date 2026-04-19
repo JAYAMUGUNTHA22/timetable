@@ -25,6 +25,7 @@ const setForSubject = async (req, res) => {
         subject: subjectId,
         faculty: fr.faculty,
         roomNumber: String(fr.roomNumber).trim(),
+        labRoomNumber: fr.labRoomNumber ? String(fr.labRoomNumber).trim() : undefined,
         order: i
       }));
     if (docs.length > 0) {

@@ -17,8 +17,34 @@ const getSubjects = async (req, res) => {
     const subjects = await Subject.find(filter)
       .populate('department', 'name departmentId')
       .populate('assignedFaculty', 'name facultyId')
-      .sort({ semester: 1, name: 1 });
-    res.json(subjects);
+      .sort({ semester: 1, name: 1 })
+      .lean();
+
+    const subjectIds = subjects.map((s) => s._id);
+    const mappingRows = subjectIds.length > 0
+      ? await SubjectFacultyRoom.find({ subject: { $in: subjectIds } })
+        .populate('faculty', 'name facultyId')
+        .sort({ order: 1 })
+        .lean()
+      : [];
+    const rowsBySubject = new Map();
+    for (const row of mappingRows) {
+      const sid = String(row.subject);
+      if (!rowsBySubject.has(sid)) rowsBySubject.set(sid, []);
+      rowsBySubject.get(sid).push({
+        facultyName: row.faculty?.name || null,
+        facultyId: row.faculty?.facultyId || null,
+        roomNumber: row.roomNumber || '',
+        labRoomNumber: row.labRoomNumber || ''
+      });
+    }
+
+    const decorated = subjects.map((s) => ({
+      ...s,
+      facultyRoomMappings: rowsBySubject.get(String(s._id)) || [],
+      facultyRoomCount: (rowsBySubject.get(String(s._id)) || []).length
+    }));
+    res.json(decorated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -39,12 +65,15 @@ const getSubject = async (req, res) => {
 const createSubject = async (req, res) => {
   try {
     const { name, semester, department, periodsPerWeek, assignedFaculty, code, facultyRooms, courseType, labDuration, labSessionsPerWeek } = req.body;
+    const firstValidFaculty = Array.isArray(facultyRooms)
+      ? (facultyRooms.find((fr) => fr && fr.faculty && fr.roomNumber && String(fr.roomNumber).trim())?.faculty || null)
+      : null;
     const doc = {
       name,
       semester: Number(semester),
       department: toObjectId(department) || department,
       periodsPerWeek: Number(periodsPerWeek),
-      assignedFaculty: toObjectId(assignedFaculty) || (facultyRooms && facultyRooms[0] && facultyRooms[0].faculty ? toObjectId(facultyRooms[0].faculty) : null) || null,
+      assignedFaculty: toObjectId(assignedFaculty) || (firstValidFaculty ? toObjectId(firstValidFaculty) : null) || null,
       courseType: courseType || 'Theory',
       labDuration: Number(labDuration) || 2,
       labSessionsPerWeek: Number(labSessionsPerWeek) || 1

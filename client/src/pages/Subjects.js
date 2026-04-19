@@ -19,8 +19,37 @@ function Subjects() {
   const [filterSemester, setFilterSemester] = useState('');
   const navigate = useNavigate();
 
-  const load = () => {
-    subjectsApi.getAll(filterSemester ? { semester: filterSemester } : {}).then(setList).catch(() => setList([]));
+  const load = async () => {
+    try {
+      const subjects = await subjectsApi.getAll(filterSemester ? { semester: filterSemester } : {});
+      const withMappings = await Promise.all(
+        (subjects || []).map(async (s) => {
+          try {
+            const mappings = await subjectsApi.getFacultyRooms(s._id);
+            const facultyRoomMappings = (mappings || []).map((m) => ({
+              facultyName: m.faculty?.name || null,
+              facultyId: m.faculty?.facultyId || null,
+              roomNumber: m.roomNumber || '',
+              labRoomNumber: m.labRoomNumber || ''
+            }));
+            return {
+              ...s,
+              facultyRoomMappings,
+              facultyRoomCount: facultyRoomMappings.length
+            };
+          } catch {
+            return {
+              ...s,
+              facultyRoomMappings: s.facultyRoomMappings || [],
+              facultyRoomCount: s.facultyRoomCount || 0
+            };
+          }
+        })
+      );
+      setList(withMappings);
+    } catch {
+      setList([]);
+    }
     departmentsApi.getAll().then(setDepartments).catch(() => setDepartments([]));
     facultyApi.getAll().then(setFaculty).catch(() => setFaculty([]));
   };
@@ -42,7 +71,13 @@ function Subjects() {
     setForm({
       name: '', semester: 1, department: departmentId || '', periodsPerWeek: 4,
       courseType: 'Theory', labDuration: 2, labSessionsPerWeek: 1,
-      facultyRooms: [{ faculty: '', roomNumber: '', labRoomNumber: '' }]
+      // Start with multiple rows so users can assign faster (single Save still applies).
+      facultyRooms: [
+        { faculty: '', roomNumber: '', labRoomNumber: '' },
+        { faculty: '', roomNumber: '', labRoomNumber: '' },
+        { faculty: '', roomNumber: '', labRoomNumber: '' },
+        { faculty: '', roomNumber: '', labRoomNumber: '' }
+      ]
     });
     setModal('create');
     setMessage(null);
@@ -99,10 +134,29 @@ function Subjects() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage(null);
-    const valid = (form.facultyRooms || []).filter((r) => r.faculty && r.roomNumber && String(r.roomNumber).trim());
+    const rows = form.facultyRooms || [];
+    const partiallyFilledRows = [];
+    const valid = rows.filter((r, idx) => {
+      const facultyValue = r.faculty ? String(r.faculty).trim() : '';
+      const theoryRoomValue = r.roomNumber ? String(r.roomNumber).trim() : '';
+      const labRoomValue = r.labRoomNumber ? String(r.labRoomNumber).trim() : '';
+      const hasAny = facultyValue || theoryRoomValue || labRoomValue;
+      const isValid = facultyValue && theoryRoomValue;
+      if (hasAny && !isValid) partiallyFilledRows.push(idx + 1);
+      return isValid;
+    });
+
+    if (partiallyFilledRows.length > 0) {
+      setMessage({
+        type: 'error',
+        text: `Please complete Faculty and Theory Room for row(s): ${partiallyFilledRows.join(', ')}.`
+      });
+      return;
+    }
+
     if (valid.length === 0) {
       setMessage({ type: 'error', text: 'Add at least one Faculty with Room number.' });
       return;
@@ -117,14 +171,27 @@ function Subjects() {
       labSessionsPerWeek: Number(form.labSessionsPerWeek),
       facultyRooms: valid
     };
-    if (modal === 'create') {
-      subjectsApi.create(payload)
-        .then(() => { setModal(null); load(); setMessage({ type: 'success', text: 'Subject created.' }); })
-        .catch((err) => setMessage({ type: 'error', text: err.message }));
-    } else {
-      subjectsApi.update(form.id, payload)
-        .then(() => { setModal(null); load(); setMessage({ type: 'success', text: 'Subject updated.' }); })
-        .catch((err) => setMessage({ type: 'error', text: err.message }));
+
+    try {
+      const saved = modal === 'create'
+        ? await subjectsApi.create(payload)
+        : await subjectsApi.update(form.id, payload);
+
+      const subjectId = saved?._id || form.id;
+      if (subjectId) {
+        await subjectsApi.setFacultyRooms(subjectId, valid);
+      }
+
+      setModal(null);
+      load();
+      setMessage({
+        type: 'success',
+        text: modal === 'create'
+          ? `Subject created with ${valid.length} faculty-room mapping(s).`
+          : `Subject updated with ${valid.length} faculty-room mapping(s).`
+      });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
     }
   };
 
@@ -190,18 +257,35 @@ function Subjects() {
                         </tr>
                       </thead>
                       <tbody>
-                        {deptSubjects.map((s) => (
-                          <tr key={s._id}>
-                            <td>{s.name}</td>
-                            <td>{s.semester}</td>
-                            <td>{s.periodsPerWeek}</td>
-                            <td>{s.assignedFaculty?.name || '-'}</td>
-                            <td>
-                              <button type="button" className="btn btn-sm btn-secondary" onClick={() => openEdit(s)}>Edit</button>
-                              <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(s._id)}>Delete</button>
-                            </td>
-                          </tr>
-                        ))}
+                        {deptSubjects.flatMap((s) => {
+                          const mappings = Array.isArray(s.facultyRoomMappings) ? s.facultyRoomMappings : [];
+                          if (mappings.length === 0) {
+                            return (
+                              <tr key={s._id}>
+                                <td>{s.name}</td>
+                                <td>{s.semester}</td>
+                                <td>{s.periodsPerWeek}</td>
+                                <td>{s.assignedFaculty?.name || '-'}</td>
+                                <td>
+                                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => openEdit(s)}>Edit</button>
+                                  <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(s._id)}>Delete</button>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          return mappings.map((m, idx) => (
+                            <tr key={`${s._id}-${idx}`}>
+                              <td>{s.name}</td>
+                              <td>{s.semester}</td>
+                              <td>{s.periodsPerWeek}</td>
+                              <td>{m.facultyName || m.facultyId || '-'}</td>
+                              <td>
+                                <button type="button" className="btn btn-sm btn-secondary" onClick={() => openEdit(s)}>Edit</button>
+                                <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(s._id)}>Delete</button>
+                              </td>
+                            </tr>
+                          ));
+                        })}
                       </tbody>
                     </table>
                   )}

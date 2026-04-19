@@ -57,6 +57,33 @@
   font-size: 0.9rem;
 }
 
+.faculty-cell {
+  min-width: 260px;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.faculty-mapping-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.faculty-mapping-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  font-size: 0.84rem;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
 .faculty-room-row {
   display: flex;
   align-items: center;
